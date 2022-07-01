@@ -25,15 +25,20 @@ def runEnrichr(modules, desc, gene_sets='GO_Biological_Process_2021', out_dir='~
         genes = modules.loc[modules.iloc[:,i]==1,i].index.tolist()
         if len(genes)>1:
             #print(genes)
-            enr = gp.enrichr(gene_list=genes,
-                             gene_sets=gene_sets,
-                             organism='Human', # don't forget to set organism to the one you desired! e.g. Yeast
-                             description=desc,
-                             outdir=os.path.join(od, desc+'_'+str(i)),
-                             no_plot=True,
-                             cutoff = 1
-                            )
-            mm_enrich.append(enr)
+            try :
+                enr = gp.enrichr(gene_list=genes,
+                                 gene_sets=gene_sets,
+                                 organism='Human', # don't forget to set organism to the one you desired! e.g. Yeast
+                                 description=desc,
+                                 outdir=os.path.join(od, desc+'_'+str(i)),
+                                 no_plot=True,
+                                 cutoff = 1
+                                )
+                mm_enrich.append(enr)
+            except Exception :
+                print("Cluster", i, ":", genes)
+            #else :
+            #    print("Cluster", i, ":", genes)
             #minAdjPval.append(enr.results.loc[0,"Adjusted P-value"])
         else:
             mm_enrich.append(None)
@@ -69,3 +74,48 @@ def getEnriched(enr_dir, score_th = 300):
     enriched.columns = col
     return enriched
 
+def runEnrichr_directory(mm_path = './ModuleMatrix', mm_enrich_dir = 'Enrich'):
+    """Run enrichment analysis for all membership matrices.
+    
+    Keyword arguments:
+    mm_path -- Path of the directory containing the membership matrices (default './ModuleMatrix')
+    mm_enrich_dir -- Name of the directory where to output results (default 'mm_enrich_dir')
+    """
+    mm_file_names = []
+    dir_in_mm = []
+    for (dirpath, dirnames, filenames) in os.walk(mm_path):
+        mm_file_names.extend(filenames)
+        dir_in_mm.extend(dirnames)
+        break
+    
+    enr_path = os.path.join(mm_path,mm_enrich_dir)
+    if mm_enrich_dir not in dir_in_mm:
+        os.makedirs(enr_path, exist_ok=True)
+    
+    enr_dir_content = []
+    for (dirpath, dirnames, filenames) in os.walk(enr_path):
+        enr_dir_content.extend(dirnames)
+        break
+
+    for filename in mm_file_names:
+        path = os.path.join(mm_path,filename)
+        #attr = filename.split('_')
+        #algo = attr[0]
+        #dataset = attr[1]
+        #if len(attr)>2:
+        #    parm = '_'.join(attr[2:])[:-4]
+
+        desc = filename[:-4]
+
+        if desc not in enr_dir_content:
+            print('Runing analysis on ', desc) 
+
+            mm = pd.read_csv(path, header=None, index_col=0)
+            if type(mm.index[0])!=str or len(mm.index[0])<2:
+                mm = pd.read_csv(path, header=0, index_col=0)
+            mm.columns = range(0,mm.shape[1])
+
+            print('out_dir :', enr_path)
+            where_ = enrich.runEnrichr(mm, desc, gene_sets='GO_Biological_Process_2021', 
+                                       out_dir= enr_path)
+            print('Enrichment results in :', where_)
