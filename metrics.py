@@ -2,32 +2,35 @@ import numpy as np
 import scipy.sparse as sp
 
 def expanded_contingency_matrix(A, B, sparse=False, full=False):
-    """Build an expanded contingency matrix to assess the degree of agreement between 
-    two clustering.
+    """Build an expanded contingency matrix to assess the degree of agreement 
+    between two clustering.
     
-    Information about the number of object pairs found in the same number of clusters
-    in the two clustering.
+    Information about the number of object pairs found in the same number of 
+    clusters in the two clustering.
     
     Parameters
     ----------
     A : bool matrix, shape = (n_samples,n_classes_A)
         First membership matrix to compare.
+        
     B : bool matrix, shape = (n_samples,n_classes_B)
         Second membership matrix to compare.
+        
     sparse : bool, default=False
-             Must be set to `True` if matrices `A` and `B` are sparse matrices.
+        Must be set to `True` if matrices `A` and `B` are sparse matrices.
+        
     full : bool, default=False
-           If `True`, returns the full contingency matrix with shape 
-           (n_classes_A, n_classes_B). If `False`, only the submatix containing all
-           the non-zero coefficients of the full matrix is returned.
+        If `True`, returns the full contingency matrix with shape 
+        (n_classes_A, n_classes_B). If `False`, only the submatix containing all the
+        non-zero coefficients of the full matrix is returned.
+           
     Returns
     -------
     contingency : int array, shape=[n_classes_A, n_classes_B]
-        Matrix `C` such that `C_{i, j}` is the number of samples pairs 
-        that is found is the same `i` classes in clustering A and in the same `j`
-        classes in clustering B. Will be of shape [j,k]<=[n_classes_A, n_classes_B]
-        if `full=False`.
-        
+        Matrix `C` such that `C_{i, j}` is the number of samples pairs that is found
+        is the same `i` classes in clustering A and in the same `j` classes in 
+        clustering B. Will be of shape [j,k]<=[n_classes_A, n_classes_B] if 
+        `full=False`.
         
     References
     ----------
@@ -49,7 +52,8 @@ def expanded_contingency_matrix(A, B, sparse=False, full=False):
     data = [1]*len(row)
     
     if full:
-        return sp.coo_matrix((data, (row, col)), shape=(A.shape[1],B.shape[1])).toarray()
+        return sp.coo_matrix((data, (row, col)), 
+                             shape=(A.shape[1],B.shape[1])).toarray()
         
     J = np.max(row, axis=None)
     K = np.max(col, axis=None)
@@ -65,16 +69,16 @@ def omega_index(A,B):
     ----------
     A : bool matrix, shape = (n_samples,n_classes_A)
         First membership matrix to compare.
+        
     B : bool matrix, shape = (n_samples,n_classes_B)
         Second membership matrix to compare.
 
     Returns
     -------
     omega : float
-            Similarity score between `-1.0` and `1.0`. Random labelings have an
-            `omega` close to `0.0`. `1.0` stands for perfect match.
+        Similarity score between `-1.0` and `1.0`. Random labelings have an `omega`
+        close to `0.0`. `1.0` stands for perfect match.
 
-        
     References
     ----------
     Collins L. M., Dent C. W. (1988). Omega: A General Formulation of the Rand Index 
@@ -107,15 +111,15 @@ def soft_omega_index(A,B):
     ----------
     A : bool matrix, shape = (n_samples,n_classes_A)
         First membership matrix to compare.
+        
     B : bool matrix, shape = (n_samples,n_classes_B)
         Second membership matrix to compare.
 
     Returns
     -------
     soft_omega : float
-            Similarity score between `-1.0` and `1.0`. Random labelings have a
-            `soft_omega` close to `0.0`. `1.0` stands for perfect match.
-
+        Similarity score between `-1.0` and `1.0`. Random labelings have a        
+        `soft_omega` close to `0.0`. `1.0` stands for perfect match.
         
     References
     ----------
@@ -147,7 +151,8 @@ def soft_omega_index(A,B):
     denom[tui] = tui[1]
     denom[tli] = tli[0]
     denom[0,0] = 1
-    denom = denom[:expanded_contingency_AB.shape[0],:expanded_contingency_AB.shape[1]]
+    denom = denom[:expanded_contingency_AB.shape[0],
+                  :expanded_contingency_AB.shape[1]]
     del tui,tli
     
     soft_fact = nom/denom
