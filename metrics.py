@@ -1,5 +1,7 @@
 import numpy as np
 import scipy.sparse as sp
+import pandas as pd
+from . import misc
 
 def expanded_contingency_matrix(A, B, sparse=False, full=False):
     """Build an expanded contingency matrix to assess the degree of agreement 
@@ -163,3 +165,58 @@ def soft_omega_index(A,B):
     J = min(len(N_i),len(N_j))
     exp_i = sum(N_i[:J]*N_j[:J])/N**2
     return (nobs - exp_i)/(1-exp_i)
+
+def compute_for_all(metric, dataset, mm_path='./ModuleMatrix/'):
+    """Compute given metric for all membership matrix of the dataset in the path.
+    
+    Parameters
+    ----------
+    metric : {'omega_index', 'soft_omega_index'} or function handle
+        To compute a metric contained in this module, the `metric` argument passed 
+        must be the name of the metric fuction as string. To compute another metric
+        not defined in this module, the corresponding function handle is be passed.
+        
+    dataset : {'rna', 'g2v'}
+        Name of one of the datasets whose membership matrices can be found in 
+        `mm_path`.
+        
+    mm_path : string
+        Path to the directory containing all membership matrices on which to compute
+        metric.
+
+    Returns
+    -------
+    SOI : pandas DataFrame, shape(n_mm, n_mm)
+        DataFrame containing the results for each pair of clustering results. Square 
+        matrix `[m_{c1,c2}]` with `c1`,`c2` two clustering results. The diagonal 
+        contains the metric computed for a clustering result on itself. If the
+        metric is symetric, the matrix will also be symetric.
+        
+    """
+    all_mm = misc.getAll_mm_def(mm_path)
+    dataset_mm = all_mm.loc[all_mm.loc[:,'Dataset']==dataset,:]
+    
+    if type(metric)==str:
+        metric = eval(metric)
+
+    soi = []
+    for i in range(dataset_mm.shape[0]):
+        for j in range(i+1,dataset_mm.shape[0]):
+            A_file = dataset_mm.iat[i,-1]
+            B_file = dataset_mm.iat[j,-1]
+            A = pd.read_csv(A_file, header=None, index_col=0)
+            B = pd.read_csv(B_file, header=None, index_col=0)
+            if type(A.index[0])!=str or len(A.index[0])<2:
+                A = pd.read_csv(A_file, header=0, index_col=0)
+            if type(B.index[0])!=str or len(B.index[0])<2:
+                B = pd.read_csv(B_file, header=0, index_col=0)
+
+            soi.append([dataset_mm.iloc[i,3], dataset_mm.iloc[j,3], metric(A,B)])
+            print(soi)
+            
+    SOI = pd.DataFrame(1, index=dataset_mm.iloc[:,3], columns=dataset_mm.iloc[:,3])
+    for i,j,s in soi:
+        SOI.loc[i,j] = s
+        SOI.loc[j,i] = s
+    
+    return SOI
