@@ -166,7 +166,7 @@ def soft_omega_index(A,B):
     exp_i = sum(N_i[:J]*N_j[:J])/N**2
     return (nobs - exp_i)/(1-exp_i)
 
-def compute_for_all(metric, dataset, mm_path='./ModuleMatrix/'):
+def compute_for_all(metric, dataset, mm_path='./MembMatrix'):
     """Compute given metric for all membership matrix of the dataset in the path.
     
     Parameters

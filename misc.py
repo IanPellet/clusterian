@@ -37,7 +37,7 @@ def get_mm_def(mm_file):
                                               'File']).T
     return mm_def
     
-def getAll_mm_def(mm_path = './ModuleMatrix/'):
+def getAll_mm_def(mm_path = './MembMatrix'):
     """Get informations about membership matrices in `mm_path`.
     
     Parameters
@@ -133,7 +133,7 @@ def summary(mm=None, file_name=None):
             - `in1cl_part` : part of samples in only one cluster (%)
     """
         
-    if mm==None and file_name==None:
+    if type(mm)==type(None) and file_name==None:
         raise Exception('At least one of `mm` or `file_name` must be specified') 
     if file_name!=None:
         mm = load_mm(file_name)
@@ -257,18 +257,23 @@ def cleanup(mm=None, file_name=None, save=False):
     mm : pandas DataFrame, shape=(n_samples, n_clusters)
         Cleaned membership matrix.
     """
-    if type(mm)==type(None) and file_name==None:
+    if type(mm)==type(None) and type(file_name)==type(None):
         raise Exception('At least one of `mm` or `file_name` must be specified')
-    if file_name!=None:
+    if type(file_name)!=type(None):
         mm = load_mm(file_name)
     
     cl_sizes = np.sum(mm, axis=0)
     empty_cl = np.where(cl_sizes==0)[0]
+    
+    if len(empty_cl)==0:
+        print("No empty cluster to remove")
+        return mm
+    
     rm_col = mm.iloc[:,empty_cl].columns
     mm = mm.drop(rm_col, axis=1)
     
     if save:
-        if file_name==None:
+        if type(file_name)==type(None):
             raise Exception('`file_name` must be passed to save cleaned matrix')
         mm.to_csv(file_name, header=None, index=True)
     return mm
