@@ -223,4 +223,24 @@ def summary_all(mm_path='./MembMatrix'):
     all_summary.loc[all_summary.iloc[:,0]=='WGCNA','uncl_part'] = all_summary.loc[all_summary.iloc[:,0]=='WGCNA','uncl_WGCNA']
     all_summary = all_summary.drop('uncl_WGCNA', axis=1)
     return all_summary
-        
+
+def load_mm(file_name):
+    """Load membership matrix.
+    
+    Parameters
+    ----------
+    file_name : string
+        Path to the file containing the membership matrix to load. 
+    
+    Returns
+    -------
+    mm : pandas DataFrame, shape=(n_samples, n_clusters)
+        Loaded membership matrix
+    """
+    mm = pd.read_csv(file_name, header=None, index_col=0)
+    if type(mm.index[0])!=str or len(mm.index[0])<2:
+        mm = pd.read_csv(file_name, header=0, index_col=0)        
+    return mm
+    
+#def cleanup(mm=None, file_name=None):
+   
