@@ -4,6 +4,23 @@ import os
 from statistics import mean, median
 
 def get_mm_def(mm_file):
+    """Get informations about membership matrix saved as `mm_file`.
+    
+    Parameters
+    ----------
+    mm_file : string
+        Path to the file containing the membership matrix.
+        
+    Returns
+    -------
+    mm_def : pandas.DataFrame, shape=(1, 5)
+        Data frame with fields : 
+            - `Alg` : the algorithm used,
+            - `Dataset` : the data set used,
+            - `Param` : parameters values for the algorithm,
+            - `Prefix` : file prefix as `Alg_Dataset_Param`,
+            - `File` : path to the membership matrix file.
+    """
     filename = mm_file.split('/')[-1]
     attr = filename.split('_')
     
@@ -16,7 +33,8 @@ def get_mm_def(mm_file):
     mm_def_list.append(filename[:-4])
     mm_def_list.append(mm_file)
 
-    mm_def = pd.DataFrame(mm_def_list, index=['Alg', 'Dataset', 'Param', 'Prefix', 'File']).T
+    mm_def = pd.DataFrame(mm_def_list, index=['Alg', 'Dataset', 'Param', 'Prefix',
+                                              'File']).T
     return mm_def
     
 def getAll_mm_def(mm_path = './ModuleMatrix/'):
@@ -30,7 +48,7 @@ def getAll_mm_def(mm_path = './ModuleMatrix/'):
     Returns
     -------
     all_mm_def : pandas.DataFrame, shape=[n_mm, 5]
-        Data frame with each row cotaining information about one cluster solution
+        Data frame with each row containing information about one cluster solution
         found in `mm_path`. The fields are : 
             - `Alg` : the algorithm used,
             - `Dataset` : the data set used,
