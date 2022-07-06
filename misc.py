@@ -134,7 +134,7 @@ def summary(mm=None, file_name=None):
     """
         
     if mm==None and file_name==None:
-        raise('At least one of `mm` or `file_name` must be specified') 
+        raise Exception('At least one of `mm` or `file_name` must be specified') 
     if file_name!=None:
         mm = load_mm(file_name)
             
