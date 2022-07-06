@@ -95,7 +95,43 @@ def lab2mat(lab, genes):
         mm.loc[genes[i],lab[i]] = 1
     return mm
 
-def summary(mm=None, file_name=None, method=None):
+def summary(mm=None, file_name=None):
+    """Get a summary of cluster number, size, composition.
+    
+    Parameters
+    ----------
+    mm : pandas DataFrame, shape=(n_samples, n_clusters), default=None
+        Membership matrix of the clustering solution to analyse. If specified, 
+        `file_name` is not needed.
+    
+    file_name : string, default=None
+        Path to the file containing the membership matrix to analyse. Must be given
+        only if `mm` is not specified.
+    
+    Returns
+    -------
+    mm_summary : pandas DataFrame, shape=(,14)
+        Contains the values for :
+            - `n_clusters` : number of clusters
+            - `max_cl_size` : maximal cluster size (# of samples)
+            - `min_cl_size` : minimal cluster size (# of samples)
+            - `mean_cl_size` : mean cluster size (# of samples)
+            - `med_cl_size` : median cluster size (# of samples)
+            - `n_empty_cl` : number of empty clusters
+            - `n_1_cl` : number of clusters containing only one sample
+            - `n_genes` : total number of samples
+            - `max_cl` : maximal number of cluster one sample is part of (# of
+            clusters)
+            - `min_cl` : minimal number of cluster one sample is part of (# of
+            clusters)
+            - `mean_cl` : mean number of cluster one sample is part of (# of
+            clusters)
+            - `med_cl` : median number of cluster one sample is part of (# of
+            clusters)
+            - `uncl_part` : part of unclustered samples (%)
+            - `in1cl_part` : part of samples in only one cluster (%)
+    """
+        
     if mm==None and file_name==None:
         raise('At least one of `mm` or `file_name` must be specified')
         
@@ -103,6 +139,9 @@ def summary(mm=None, file_name=None, method=None):
         mm = pd.read_csv(file_name, header=None, index_col=0)
         if type(mm.index[0])!=str or len(mm.index[0])<2:
             mm = pd.read_csv(file_name, header=0, index_col=0)
+        method = get_mm_def(file_name).iat[0,0]
+    elif mm!=None and method==None:
+        raise('If `file_name` is not specified, `method` must be specified')
             
     n_clusters = mm.shape[1]
     cl_sizes = np.sum(mm, axis=0)
@@ -132,6 +171,42 @@ def summary(mm=None, file_name=None, method=None):
     return pd.DataFrame(ppt, index=names).T
 
 def summary_all(mm_path='./MembMatrix'):
+    """Get a summary of cluster number, size, composition for all mm in `mm_path`.
+    
+    Parameters
+    ----------    
+    mm_path : string, default='./MembMatrix'
+        Path to the directory containing all the membership matrix to analyse.
+    
+    Returns
+    -------
+    all_summary : pandas DataFrame, shape=(n_mm,14)
+        Each row represents one clustering solution.
+        Contains the values for :
+             - `Alg` : the algorithm used,
+            - `Dataset` : the data set used,
+            - `Param` : parameters values for the algorithm,
+            - `Prefix` : file prefix as `Alg_Dataset_Param`,
+            - `File` : path to the membership matrix file.
+            - `n_clusters` : number of clusters
+            - `max_cl_size` : maximal cluster size (# of samples)
+            - `min_cl_size` : minimal cluster size (# of samples)
+            - `mean_cl_size` : mean cluster size (# of samples)
+            - `med_cl_size` : median cluster size (# of samples)
+            - `n_empty_cl` : number of empty clusters
+            - `n_1_cl` : number of clusters containing only one sample
+            - `n_genes` : total number of samples
+            - `max_cl` : maximal number of cluster one sample is part of (# of
+            clusters)
+            - `min_cl` : minimal number of cluster one sample is part of (# of
+            clusters)
+            - `mean_cl` : mean number of cluster one sample is part of (# of
+            clusters)
+            - `med_cl` : median number of cluster one sample is part of (# of
+            clusters)
+            - `uncl_part` : part of unclustered samples (%)
+            - `in1cl_part` : part of samples in only one cluster (%)
+    """
     all_def = getAll_mm_def(mm_path)
     all_sum_list = []
     fname_col = all_def.columns[-1]
