@@ -137,10 +137,7 @@ def summary(mm=None, file_name=None):
         raise('At least one of `mm` or `file_name` must be specified')
         
     if file_name!=None:
-        mm = pd.read_csv(file_name, header=None, index_col=0)
-        if type(mm.index[0])!=str or len(mm.index[0])<2:
-            mm = pd.read_csv(file_name, header=0, index_col=0)
-        method = get_mm_def(file_name).iat[0,0]
+        mm = load_mm(file_name)
     elif mm!=None and method==None:
         raise('If `file_name` is not specified, `method` must be specified')
             
