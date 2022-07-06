@@ -134,12 +134,9 @@ def summary(mm=None, file_name=None):
     """
         
     if mm==None and file_name==None:
-        raise('At least one of `mm` or `file_name` must be specified')
-        
+        raise('At least one of `mm` or `file_name` must be specified') 
     if file_name!=None:
         mm = load_mm(file_name)
-    elif mm!=None and method==None:
-        raise('If `file_name` is not specified, `method` must be specified')
             
     n_clusters = mm.shape[1]
     cl_sizes = np.sum(mm, axis=0)
@@ -239,5 +236,39 @@ def load_mm(file_name):
         mm = pd.read_csv(file_name, header=0, index_col=0)        
     return mm
     
-#def cleanup(mm=None, file_name=None):
-   
+def cleanup(mm=None, file_name=None, save=False):
+    """Remove the empty cluster from membership matrix.
+    
+    Parameters
+    ----------
+    mm : pandas DataFrame, shape=(n_samples, n_clusters), default=None
+        Membership matrix of the clustering solution to analyse. If specified and 
+        `save`=False, `file_name` is not needed.
+    
+    file_name : string, default=None
+        Path to the file containing the membership matrix to analyse. Must be given
+        if `mm` is not specified or if `save`=True.
+    
+    save : bool, default=False
+        If True, the cleaned membership matrix will be saved to `file_name`.
+    
+    Returns
+    -------
+    mm : pandas DataFrame, shape=(n_samples, n_clusters)
+        Cleaned membership matrix.
+    """
+    if type(mm)==type(None) and file_name==None:
+        raise Exception('At least one of `mm` or `file_name` must be specified')
+    if file_name!=None:
+        mm = load_mm(file_name)
+    
+    cl_sizes = np.sum(mm, axis=0)
+    empty_cl = np.where(cl_sizes==0)[0]
+    rm_col = mm.iloc[:,empty_cl].columns
+    mm = mm.drop(rm_col, axis=1)
+    
+    if save:
+        if file_name==None:
+            raise Exception('`file_name` must be passed to save cleaned matrix')
+        mm.to_csv(file_name, header=None, index=True)
+    return mm
