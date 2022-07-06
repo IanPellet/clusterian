@@ -129,6 +129,7 @@ def summary(mm=None, file_name=None):
             - `med_cl` : median number of cluster one sample is part of (# of
             clusters)
             - `uncl_part` : part of unclustered samples (%)
+            - `uncl_WGCNA` : part of unclustered samples for algo WGCNA (%)
             - `in1cl_part` : part of samples in only one cluster (%)
     """
         
@@ -159,16 +160,18 @@ def summary(mm=None, file_name=None):
     mean_cl = mean(cl_per_genes)
     med_cl = median(cl_per_genes)
     uncl_part = sum(cl_per_genes==0)/n_genes
+    cl0_part = cl_sizes.iat[0]/n_genes
     in1cl_part = sum(cl_per_genes==1)/n_genes
     
     
     ppt = [n_clusters, max_cl_size, min_cl_size, mean_cl_size, med_cl_size, 
            n_empty_cl, n_1_cl, n_genes, max_cl, min_cl, mean_cl, med_cl, uncl_part,
-           in1cl_part]
+           cl0_part, in1cl_part]
     names = ['n_clusters', 'max_cl_size', 'min_cl_size', 'mean_cl_size', 
              'med_cl_size', 'n_empty_cl', 'n_1_cl', 'n_genes', 'max_cl', 'min_cl',
-             'mean_cl', 'med_cl', 'uncl_part', 'in1cl_part']
-    return pd.DataFrame(ppt, index=names).T
+             'mean_cl', 'med_cl', 'uncl_part', 'uncl_WGCNA', 'in1cl_part']
+    mm_summary = pd.DataFrame(ppt, index=names).T
+    return mm_summary
 
 def summary_all(mm_path='./MembMatrix'):
     """Get a summary of cluster number, size, composition for all mm in `mm_path`.
@@ -214,8 +217,10 @@ def summary_all(mm_path='./MembMatrix'):
         i_sum = summary(file_name=all_def.loc[i,fname_col])
         i_sum.index = [i]
         all_sum_list.append(i_sum)
-    return all_sum_list
+
     all_sum_ppt = pd.concat(all_sum_list)
     all_summary = pd.concat([all_def,all_sum_ppt], axis=1)
+    all_summary.loc[all_summary.iloc[:,0]=='WGCNA','uncl_part'] = all_summary.loc[all_summary.iloc[:,0]=='WGCNA','uncl_WGCNA']
+    all_summary = all_summary.drop('uncl_WGCNA', axis=1)
     return all_summary
         
