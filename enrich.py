@@ -60,6 +60,9 @@ def getEnriched(enr_dir, score_th = 300, genes=None):
         
     score_th : int, default=300
         Combined Score threshold above which a term is considered as enriched.
+    
+    genes : array, shape=(n_genes,)
+        List of all genes in the dataset.
         
     Returns :
     -------
@@ -161,7 +164,7 @@ def getAll_enr_def(enr_path = './MembMatrix/Enrich/'):
         
     Returns
     -------
-    all_mm_def : pandas.DataFrame, shape=[n_mm, 5]
+    all_def : pandas.DataFrame, shape=[n_mm, 5]
         Data frame with each row containing information about one cluster solution
         found in `mm_path`. The fields are : 
             - `Alg` : the algorithm used,

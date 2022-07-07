@@ -10,8 +10,9 @@ def get_mm_def(mm_file, extension='.csv'):
     ----------
     mm_file : string
         Path to the file containing the membership matrix.
-    extension : string or None
-        File extension
+        
+    extension : string or None, default='.csv'
+        File extension.
         
     Returns
     -------
