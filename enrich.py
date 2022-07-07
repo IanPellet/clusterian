@@ -60,8 +60,11 @@ def getEnriched(enr_dir, score_th = 300):
     """
     enriched_ = []
     for root, dirs, files in os.walk(enr_dir, topdown=False):
+        path_dirs = root.split('/')
+        if path_dirs[-1][0]=='.':
+            files = []
         for name in files:
-            cl = int(root.split('_')[-1][3:])
+            cl = int(root.split('_')[-1])
             path = os.path.join(root, name)
             full_tab = pd.read_csv(path, sep='\t').sort_values('Adjusted P-value', ascending=True)
             enr_tab = full_tab.loc[full_tab.loc[:,'Combined Score']>score_th,:]
