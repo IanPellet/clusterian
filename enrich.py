@@ -2,6 +2,7 @@ import gseapy as gp
 import pandas as pd
 import numpy as np
 import os
+from . import misc
 
 def runEnrichr(modules, desc, gene_sets='GO_Biological_Process_2021', out_dir='~/Documents/Clustering/ModuleMatrix/Enrich/'):
     """Run enrichment analysis on all clusters, returns output directory.
@@ -149,3 +150,39 @@ def runEnrichr_directory(mm_path = './ModuleMatrix', mm_enrich_dir = 'Enrich'):
             where_ = enrich.runEnrichr(mm, desc, gene_sets='GO_Biological_Process_2021', 
                                        out_dir= enr_path)
             print('Enrichment results in :', where_)
+            
+def getAll_enr_def(enr_path = './MembMatrix/Enrich/'):
+    """Get informations about enrichment directories in `enr_path`.
+    
+    Parameters
+    ----------
+    enr_path : string
+        Path to the directory containing all the enrichment results.
+        
+    Returns
+    -------
+    all_mm_def : pandas.DataFrame, shape=[n_mm, 5]
+        Data frame with each row containing information about one cluster solution
+        found in `mm_path`. The fields are : 
+            - `Alg` : the algorithm used,
+            - `Dataset` : the data set used,
+            - `Param` : parameters values for the algorithm,
+            - `Prefix` : file prefix as `Alg_Dataset_Param`,
+            - `File` : path to the enrichment directory.
+    """
+    dir_in_path = []
+    for (dirpath, dirnames, filenames) in os.walk(enr_path):
+        dir_in_path.extend(dirnames)
+        break
+    enr_dirs = [os.path.join(enr_path,d) for d in dir_in_path if d[0]!='.']
+    #return enr_dirs
+    
+    all_def_list = []
+    for i in range(len(enr_dirs)):
+        i_def = misc.get_mm_def(enr_dirs[i], extension=None)
+        #print(enr_dirs[i], ':', i_def, '\n')
+        i_def.index = [i]
+        all_def_list.append(i_def)
+
+    all_def = pd.concat(all_def_list)
+    return all_def
