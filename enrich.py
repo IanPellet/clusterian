@@ -48,17 +48,36 @@ def runEnrichr(modules, desc, gene_sets='GO_Biological_Process_2021', out_dir='~
     #return minAdjPval
     return od
 
-def getEnriched(enr_dir, score_th = 300):
+def getEnriched(enr_dir, score_th = 300, genes=None):
     """Create and return a DataFrame of all the enriched terms in each cluster.
     
-    Arguments:
-    enr_dir -- path to the directory where to find the subdirectories created by enrichr analysis for each cluster
-    Keyword arguments:
-    score_th -- Combined Score threshold above which a term is considered as enriched (default 300)
-    Return value:
-    enriched -- pandas DataFrame with all the enriched terms in each cluster, first column is the coresponding cluster number
+    Parameters :
+    ----------
+    enr_dir : string
+        Path to the directory where to find the subdirectories created by enrichr
+        analysis for each cluster.
+        
+    score_th : int, default=300
+        Combined Score threshold above which a term is considered as enriched.
+        
+    Returns :
+    -------
+    enriched : pandas DataFrame, shape(n_enriched_term, 11)
+        All the enriched terms in each cluster with : 
+            - `Cluster` : correponding cluster
+            - `Gene_set` : data base used to run enrichment analysis
+            - `Term` : enriched term name
+            - `Overlap`
+            - `P-value`
+            - `Adjusted P-value`
+            - `Old P-value`
+            - `Old Adjusted P-value`
+            - `Odds Ratio`
+            - `Combined Score`
+            - `Genes` : set of genses in the cluster and in the enriched term
     """
     enriched_ = []
+    n_term_cl = []
     for root, dirs, files in os.walk(enr_dir, topdown=False):
         path_dirs = root.split('/')
         if path_dirs[-1][0]=='.':
@@ -66,16 +85,24 @@ def getEnriched(enr_dir, score_th = 300):
         for name in files:
             cl = int(root.split('_')[-1])
             path = os.path.join(root, name)
-            full_tab = pd.read_csv(path, sep='\t').sort_values('Adjusted P-value', ascending=True)
+            full_tab = pd.read_csv(path, sep='\t').sort_values('Adjusted P-value',
+                                                               ascending=True)
             enr_tab = full_tab.loc[full_tab.loc[:,'Combined Score']>score_th,:]
-            new_col = pd.Series([cl]*enr_tab.shape[0], index=enr_tab.index, dtype=int)
+            new_col = pd.Series([cl]*enr_tab.shape[0], index=enr_tab.index,
+                                dtype=int)
             enriched_.append(pd.concat([new_col,enr_tab], axis=1))
-
+            n_term_cl.append([cl, len(new_col)])
     enriched = pd.concat(enriched_, axis=0).sort_values(0)
     col = enriched.columns.tolist()
     col[0] = 'Cluster'
     enriched.columns = col
-    return enriched
+    n_term_cl = pd.DataFrame(n_term_cl, columns=['Cluster',
+                                                 'n_enrich']).sort_values('Cluster')
+    enr_cl_part = sum(n_term_cl.loc[:,'n_enrich']>0)/n_term_cl.shape[0]
+    genes_in_enr = np.unique(';'.join(enriched.loc[:,'Genes']).split(';'))
+    if type(genes)!=type(None):
+        genes_in_enr_part = len(genes_in_enr)/len(genes)
+    return enriched, n_term_cl, enr_cl_part, genes_in_enr_part if type(genes)!=type(None) else genes_in_enr
 
 def runEnrichr_directory(mm_path = './ModuleMatrix', mm_enrich_dir = 'Enrich'):
     """Run enrichment analysis for all membership matrices.
