@@ -189,3 +189,59 @@ def getAll_enr_def(enr_path = './MembMatrix/Enrich/'):
 
     all_def = pd.concat(all_def_list)
     return all_def
+
+def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300):
+    """Get cluster evaluation according to enrichment results in `enr_path`.
+    
+    In order to evaluate the quality of each clustering solution regarding the 
+    biological significativity of the detected clusters three metrics were defined.
+        - enr_cl : proportion of cluster having at least one enriched term compared 
+        to the total number of clusters of the solution.
+        - enr_genes : proportion of genes part of at least one enriched term of the
+        whole clustering solution compared to the total number of genes clustered.
+        - Product : the product of the two metrics defined above. Number between 0 
+        and 1. Better clustering solution will have a higher value.
+    
+    Parameters
+    ----------
+    datasets : dict {string : pandas.DataFrame}
+        Dictionnary containing the different datasets used in the study referened by
+        its name as defined in all enrichment file names.
+    
+    enr_path : string
+        Path to the directory containing all the enrichment results.
+        
+    score_th : int, default=300
+        Combined Score threshold above which a term is considered as enriched.
+        
+    Returns
+    -------
+    evalEnr_all : pandas.DataFrame, shape=[n_dir, 8]
+        Data frame with each row containing information about one cluster solution
+        found in `enr_path` and the evaluation metrics computed. The fields are : 
+            - `Alg` : the algorithm used,
+            - `Dataset` : the data set used,
+            - `Param` : parameters values for the algorithm,
+            - `Prefix` : file prefix as `Alg_Dataset_Param`,
+            - `File` : path to the enrichment directory,
+            - `enr_cl` : part of clusters with at least one enriched term,
+            - `enr_genes` : total number of genes included in an enriched term,
+            - `Product` : product of `enr_cl` and `enr_genes`.
+        The data frame is sorted in descending order according to the field
+        `Product`.
+    """
+    all_enr =  getAll_enr_def(enr_path)
+    evalEnr = []
+    evalEnr_i = []
+    for i in all_enr.index:
+        data = datasets[all_enr.at[i,'Dataset']]
+        _, _, cl_part, genes_part = getEnriched(all_enr.at[i,'File'],
+                                                score_th,genes=data.index)
+        evalEnr.append([cl_part, genes_part, cl_part*genes_part])
+        evalEnr_i.append(i)
+        
+    evalEnr = pd.DataFrame(evalEnr, index=evalEnr_i, 
+                           columns=['enr_cl','enr_genes','Product'])
+    evalEnr_all = pd.concat([all_enr, evalEnr], axis=1)
+
+    return evalEnr_all.sort_values('Product', ascending=False)
