@@ -3,13 +3,15 @@ import numpy as np
 import os
 from statistics import mean, median
 
-def get_mm_def(mm_file):
+def get_mm_def(mm_file, extension='.csv'):
     """Get informations about membership matrix saved as `mm_file`.
     
     Parameters
     ----------
     mm_file : string
         Path to the file containing the membership matrix.
+    extension : string or None
+        File extension
         
     Returns
     -------
@@ -25,12 +27,17 @@ def get_mm_def(mm_file):
     attr = filename.split('_')
     
     mm_def_list = [attr[0], attr[1]]
+    
+    if type(extension)==str:
+        if extension[0]!='.':
+            extension = '.' + extension
+        filename = filename.removesuffix(extension)
 
     if len(attr)>2:
-        mm_def_list.append('_'.join(attr[2:])[:-4])
+        mm_def_list.append('_'.join(attr[2:]))
     else:
         mm_def_list.append(None)
-    mm_def_list.append(filename[:-4])
+    mm_def_list.append(filename)
     mm_def_list.append(mm_file)
 
     mm_def = pd.DataFrame(mm_def_list, index=['Alg', 'Dataset', 'Param', 'Prefix',
