@@ -86,11 +86,15 @@ def getEnriched(enr_dir, score_th = 300, genes=None):
         path_dirs = root.split('/')
         if path_dirs[-1][0]=='.':
             files = []
-        for name in files:
+        files_res = []
+        for f in files:
+            if "enrichr.reports" in f:
+                files_res.append(f)
+
+        for name in files_res:
             cl = int(root.split('_')[-1])
             path = os.path.join(root, name)
-            full_tab = pd.read_csv(path, sep='\t').sort_values('Adjusted P-value',
-                                                               ascending=True)
+            full_tab = pd.read_csv(path, sep='\t')
             enr_tab = full_tab.loc[full_tab.loc[:,'Combined Score']>score_th,:]
             new_col = pd.Series([cl]*enr_tab.shape[0], index=enr_tab.index,
                                 dtype=int)
@@ -108,7 +112,7 @@ def getEnriched(enr_dir, score_th = 300, genes=None):
         genes_in_enr_part = len(genes_in_enr)/len(genes)
     return enriched, n_term_cl, enr_cl_part, genes_in_enr_part if type(genes)!=type(None) else genes_in_enr
 
-def runEnrichr_directory(mm_path = './ModuleMatrix', mm_enrich_dir = 'Enrich'):
+def runEnrichr_directory(mm_path = './MembMatrix', mm_enrich_dir = 'Enrich'):
     """Run enrichment analysis for all membership matrices.
     
     Keyword arguments:
@@ -150,7 +154,7 @@ def runEnrichr_directory(mm_path = './ModuleMatrix', mm_enrich_dir = 'Enrich'):
             mm.columns = range(0,mm.shape[1])
 
             print('out_dir :', enr_path)
-            where_ = enrich.runEnrichr(mm, desc, gene_sets='GO_Biological_Process_2021', 
+            where_ = runEnrichr(mm, desc, gene_sets='GO_Biological_Process_2021', 
                                        out_dir= enr_path)
             print('Enrichment results in :', where_)
             
@@ -231,17 +235,25 @@ def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300):
         `Product`.
     """
     all_enr =  getAll_enr_def(enr_path)
-    evalEnr = []
+    evalEnr_cl = []
+    evalEnr_genes = []
     evalEnr_i = []
     for i in all_enr.index:
         data = datasets[all_enr.at[i,'Dataset']]
         _, _, cl_part, genes_part = getEnriched(all_enr.at[i,'File'],
                                                 score_th,genes=data.index)
-        evalEnr.append([cl_part, genes_part, cl_part*genes_part])
+        evalEnr_cl.append(cl_part)
+        evalEnr_genes.append(genes_part)
         evalEnr_i.append(i)
-        
-    evalEnr = pd.DataFrame(evalEnr, index=evalEnr_i, 
-                           columns=['enr_cl','enr_genes','Product'])
+    
+    
+    norm_cl = pd.Series((evalEnr_cl-np.mean(evalEnr_cl))/np.std(evalEnr_cl))
+    norm_genes = pd.Series((evalEnr_genes - np.mean(evalEnr_genes))/np.std(evalEnr_genes))
+    evalEnr = pd.DataFrame([pd.Series(evalEnr_cl), pd.Series(evalEnr_genes),
+                            norm_cl, norm_genes, norm_cl+norm_genes], 
+                           columns=evalEnr_i, 
+                           index=['enr_cl', 'enr_genes','norm_cl', 
+                                    'norm_genes', 'sum_norm']).T
     evalEnr_all = pd.concat([all_enr, evalEnr], axis=1)
 
-    return evalEnr_all.sort_values('Product', ascending=False)
+    return evalEnr_all.sort_values('sum_norm', ascending=False)
