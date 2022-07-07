@@ -33,13 +33,18 @@ def ward_tree_2_label_mat(ward_child, genes):
     n_cl = n_samples
     lab = pd.Series([i for i in range(n_samples)],index=genes) 
 
-    n_cl = [n_samples-i for i in range(len(ward_child)+1)] # number of clusters at each iteration
-    lab_df = pd.DataFrame(0, index=genes, columns=n_cl) # matrix to fill with labels at each iteration
+    # number of clusters at each iteration
+    n_cl = [n_samples-i for i in range(len(ward_child)+1)] 
+    # matrix to fill with labels at each iteration
+    lab_df = pd.DataFrame(0, index=genes, columns=n_cl) 
     lab_df.iloc[:,0] = lab 
     for i in range(len(ward_child)):
-        a,b = ward_child[i] # at iteration i, clusters a and b are merged into one cluster
+        a,b = ward_child[i] 
+        # at iteration i, clusters a and b are merged into one cluster
         new_node = n_samples + i # label of the new cluster
-        new_lab = lab_df.iloc[:,i].copy(deep=True) # the new label list is inialised as equal to the last one
+        # the new label list is inialised as equal to the last one
+        new_lab = lab_df.iloc[:,i].copy(deep=True) 
+        
         # merged cluster lables are modified
         new_lab[lab_df.iloc[:,-1]==a] = new_node
         new_lab[lab_df.iloc[:,-1]==b] = new_node
