@@ -95,7 +95,11 @@ def getEnriched(enr_dir, score_th = 300, genes=None):
             cl = int(root.split('_')[-1])
             path = os.path.join(root, name)
             full_tab = pd.read_csv(path, sep='\t')
-            enr_tab = full_tab.loc[full_tab.loc[:,'Combined Score']>score_th,:]
+            try :
+                enr_tab = full_tab.loc[full_tab.loc[:,'Combined Score']>score_th,:]
+            except KeyError :
+                print('Invalid report for', path)
+                #print(full_tab)
             new_col = pd.Series([cl]*enr_tab.shape[0], index=enr_tab.index,
                                 dtype=int)
             enriched_.append(pd.concat([new_col,enr_tab], axis=1))
@@ -143,7 +147,7 @@ def runEnrichr_directory(mm_path = './MembMatrix', mm_enrich_dir = 'Enrich'):
         #if len(attr)>2:
         #    parm = '_'.join(attr[2:])[:-4]
 
-        desc = filename[:-4]
+        desc = filename.removesuffix('.csv')
 
         if desc not in enr_dir_content:
             print('Runing analysis on ', desc) 
@@ -242,6 +246,12 @@ def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300):
         data = datasets[all_enr.at[i,'Dataset']]
         _, _, cl_part, genes_part = getEnriched(all_enr.at[i,'File'],
                                                 score_th,genes=data.index)
+        if False:
+            try :
+                _, _, cl_part, genes_part = getEnriched(all_enr.at[i,'File'],
+                                                        score_th,genes=data.index)
+            except KeyError:
+                print(all_enr.at[i,'File'])
         evalEnr_cl.append(cl_part)
         evalEnr_genes.append(genes_part)
         evalEnr_i.append(i)
@@ -255,5 +265,6 @@ def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300):
                            index=['enr_cl', 'enr_genes','norm_cl', 
                                     'norm_genes', 'sum_norm']).T
     evalEnr_all = pd.concat([all_enr, evalEnr], axis=1)
-
-    return evalEnr_all.sort_values('sum_norm', ascending=False)
+    evalEnr_sorted = evalEnr_all.sort_values('sum_norm', ascending=False)
+    evalEnr_sorted.index = [i for i in range(evalEnr_sorted.shape[0])]
+    return evalEnr_sorted
