@@ -46,8 +46,8 @@ def ward_tree_2_label_mat(ward_child, genes):
         new_lab = lab_df.iloc[:,i].copy(deep=True) 
         
         # merged cluster lables are modified
-        new_lab[lab_df.iloc[:,-1]==a] = new_node
-        new_lab[lab_df.iloc[:,-1]==b] = new_node
+        new_lab[lab_df.iloc[:,i]==a] = new_node
+        new_lab[lab_df.iloc[:,i]==b] = new_node
         lab_df.iloc[:,i+1] = new_lab # new label list is added to the matrix
 
     return lab_df
