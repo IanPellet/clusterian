@@ -37,7 +37,7 @@ def runEnrichr(modules, desc, gene_sets='GO_Biological_Process_2021', out_dir='~
                                 )
                 mm_enrich.append(enr)
             except Exception :
-                print("Cluster", i, ":", genes)
+                print("Cluster", i)
             #else :
             #    print("Cluster", i, ":", genes)
             #minAdjPval.append(enr.results.loc[0,"Adjusted P-value"])
@@ -97,13 +97,18 @@ def getEnriched(enr_dir, score_th = 300, genes=None):
             full_tab = pd.read_csv(path, sep='\t')
             try :
                 enr_tab = full_tab.loc[full_tab.loc[:,'Combined Score']>score_th,:]
+                new_col = pd.Series([cl]*enr_tab.shape[0], index=enr_tab.index,
+                                dtype=int)
+                enriched_.append(pd.concat([new_col,enr_tab], axis=1))
+                n_term_cl.append([cl, len(new_col)])
             except KeyError :
                 print('Invalid report for', path)
                 #print(full_tab)
-            new_col = pd.Series([cl]*enr_tab.shape[0], index=enr_tab.index,
-                                dtype=int)
-            enriched_.append(pd.concat([new_col,enr_tab], axis=1))
-            n_term_cl.append([cl, len(new_col)])
+            
+            
+    if len(enriched_)==0:
+        return None, None, None, None
+    
     enriched = pd.concat(enriched_, axis=0).sort_values(0)
     col = enriched.columns.tolist()
     col[0] = 'Cluster'
@@ -234,9 +239,11 @@ def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300):
             - `File` : path to the enrichment directory,
             - `enr_cl` : part of clusters with at least one enriched term,
             - `enr_genes` : total number of genes included in an enriched term,
-            - `Product` : product of `enr_cl` and `enr_genes`.
+            - `norm_cl` : normalized `enr_cl`
+            - `norm_genes` : normalized `enr_genes`,
+            - `sum_norm` : sum of `norm_cl` and `norm_genes`.
         The data frame is sorted in descending order according to the field
-        `Product`.
+        `sum_norm`.
     """
     all_enr =  getAll_enr_def(enr_path)
     evalEnr_cl = []
@@ -250,10 +257,17 @@ def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300):
             try :
                 _, _, cl_part, genes_part = getEnriched(all_enr.at[i,'File'],
                                                         score_th,genes=data.index)
-            except KeyError:
+                if type(cl_part)==type(None) or type(genes_part)==type(None):
+                    raise Exception('Empty enrichment directory')
+            except KeyError or Exception :
                 print(all_enr.at[i,'File'])
-        evalEnr_cl.append(cl_part)
-        evalEnr_genes.append(genes_part)
+                
+        if type(cl_part)==type(None) or type(genes_part)==type(None):
+            evalEnr_cl.append(0)
+            evalEnr_genes.append(0)
+        else:
+            evalEnr_cl.append(cl_part)
+            evalEnr_genes.append(genes_part)
         evalEnr_i.append(i)
     
     
