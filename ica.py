@@ -7,8 +7,9 @@ from scipy import stats
 from scipy.linalg import svd
 #from sklearn.manifold import MDS
 from sklearn.decomposition import FastICA
-import rpy2.robjects as robjects
+from rpy2.robjects.vectors import FloatVector
 from rpy2.robjects.packages import importr
+import rpy2.rinterface as ri
 
 def randDataSVD(data, K=10):
     """Create K random data sets, compute SVD and return K singular value vectors.
@@ -161,16 +162,18 @@ def runFDRanalysis(S_):
     Return value:
     S_fdr -- matrix of FDR
     """
-    fdrtool = importr('fdrtool')
+    fdrtools = importr('fdrtool')
 
-    sort = robjects.r['sort']
-    fdr = robjects.r['fdrtool']
+    #sort = robjects.r['sort']
+    #fdr = robjects.r['fdrtool']
 
     S_fdr = np.zeros_like(S_)
     for i in range(S_.shape[1]):
-        res = robjects.FloatVector(S_[:,i])
+        #res = robjects.FloatVector(S_[:,i])
+        res = FloatVector(S_[:,i])
         try:
-            S_fdr[:,i] = fdr(res, plot=False, verbose=False)[0]
+            #S_fdr[:,i] = fdr(res, plot=False, verbose=False)[0]
+            S_fdr[:,i] = fdrtools.fdrtool(res, plot=False, verbose=False)[0]
         except BaseException:
             S_fdr[:,i] = abs(S_[:,i]-1)
     return S_fdr
