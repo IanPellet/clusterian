@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 from . import misc
+from math import sqrt
 
 def runEnrichr(modules, desc, gene_sets='GO_Biological_Process_2021', out_dir='~/Documents/Clustering/ModuleMatrix/Enrich/'):
     """Run enrichment analysis on all clusters, returns output directory.
@@ -205,16 +206,7 @@ def getAll_enr_def(enr_path = './MembMatrix/Enrich/'):
 
 def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300):
     """Get cluster evaluation according to enrichment results in `enr_path`.
-    
-    In order to evaluate the quality of each clustering solution regarding the 
-    biological significativity of the detected clusters three metrics were defined.
-        - enr_cl : proportion of cluster having at least one enriched term compared 
-        to the total number of clusters of the solution.
-        - enr_genes : proportion of genes part of at least one enriched term of the
-        whole clustering solution compared to the total number of genes clustered.
-        - Product : the product of the two metrics defined above. Number between 0 
-        and 1. Better clustering solution will have a higher value.
-    
+
     Parameters
     ----------
     datasets : dict {string : pandas.DataFrame}
@@ -237,48 +229,44 @@ def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300):
             - `Param` : parameters values for the algorithm,
             - `Prefix` : file prefix as `Alg_Dataset_Param`,
             - `File` : path to the enrichment directory,
-            - `enr_cl` : part of clusters with at least one enriched term,
-            - `enr_genes` : total number of genes included in an enriched term,
-            - `norm_cl` : normalized `enr_cl`
-            - `norm_genes` : normalized `enr_genes`,
-            - `sum_norm` : sum of `norm_cl` and `norm_genes`.
-        The data frame is sorted in descending order according to the field
-        `sum_norm`.
+            - `rC` : ratio of clusters with at least one enriched term,
+            - `rG` : ratio of genes included in an enriched term,
+            - `Zc` : z-score for `rC`,
+            - `Zg` : z-score for `rG`,
+            - `Z-score` : z-score for `Zc + Zg`,.
     """
     all_enr =  getAll_enr_def(enr_path)
-    evalEnr_cl = []
-    evalEnr_genes = []
-    evalEnr_i = []
+    rC = []
+    rG = []
+    ri = []
     for i in all_enr.index:
         data = datasets[all_enr.at[i,'Dataset']]
-        _, _, cl_part, genes_part = getEnriched(all_enr.at[i,'File'],
-                                                score_th,genes=data.index)
-        if False:
-            try :
-                _, _, cl_part, genes_part = getEnriched(all_enr.at[i,'File'],
-                                                        score_th,genes=data.index)
-                if type(cl_part)==type(None) or type(genes_part)==type(None):
-                    raise Exception('Empty enrichment directory')
-            except KeyError or Exception :
-                print(all_enr.at[i,'File'])
+        _, _, rCi, rGi = getEnriched(all_enr.at[i,'File'],score_th,genes=data.index)
+        
+#        if False:
+#            try :
+#                _, _, rCi, rGi = getEnriched(all_enr.at[i,'File'],
+#                                                        score_th,genes=data.index)
+#                if type(rCi)==type(None) or type(rGi)==type(None):
+#                    raise Exception('Empty enrichment directory')
+#            except KeyError or Exception :
+#                print(all_enr.at[i,'File'])
                 
-        if type(cl_part)==type(None) or type(genes_part)==type(None):
-            evalEnr_cl.append(0)
-            evalEnr_genes.append(0)
+        if type(rCi)==type(None) or type(rGi)==type(None):
+            rC.append(0)
+            rG.append(0)
         else:
-            evalEnr_cl.append(cl_part)
-            evalEnr_genes.append(genes_part)
-        evalEnr_i.append(i)
+            rC.append(rCi)
+            rG.append(rGi)
+        ri.append(i)
     
     
-    norm_cl = pd.Series((evalEnr_cl-np.mean(evalEnr_cl))/np.std(evalEnr_cl))
-    norm_genes = pd.Series((evalEnr_genes - np.mean(evalEnr_genes))/np.std(evalEnr_genes))
-    evalEnr = pd.DataFrame([pd.Series(evalEnr_cl), pd.Series(evalEnr_genes),
-                            norm_cl, norm_genes, norm_cl+norm_genes], 
-                           columns=evalEnr_i, 
-                           index=['enr_cl', 'enr_genes','norm_cl', 
-                                    'norm_genes', 'sum_norm']).T
+    Zc = pd.Series((rC-np.mean(rC))/np.std(rC))
+    Zg = pd.Series((rG - np.mean(rG))/np.std(rG))
+    evalEnr = pd.DataFrame([pd.Series(rC), pd.Series(rG),Zc, Zg, (Zc+Zg)/sqrt(2)], 
+                           columns=ri, index=['rC', 'rG','Zc','Zg', 'Z-score']).T
     evalEnr_all = pd.concat([all_enr, evalEnr], axis=1)
-    evalEnr_sorted = evalEnr_all.sort_values('sum_norm', ascending=False)
-    evalEnr_sorted.index = [i for i in range(evalEnr_sorted.shape[0])]
-    return evalEnr_sorted
+    #evalEnr_sorted = evalEnr_all.sort_values('Z', ascending=False)
+    #evalEnr_sorted.index = [i for i in range(evalEnr_sorted.shape[0])]
+    #return evalEnr_sorted
+    return evalEnr_all
