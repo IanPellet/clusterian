@@ -270,3 +270,87 @@ def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300):
     #evalEnr_sorted.index = [i for i in range(evalEnr_sorted.shape[0])]
     #return evalEnr_sorted
     return evalEnr_all
+
+def getBest_cluster_list(enr_dir):
+    """Get the list of most enriched clusters according to combined score.
+    
+    Parameters
+    ----------
+    enr_dir : string
+        Path to the directory containing the enrichment analysis results for all 
+        clusters.
+    Returns
+    -------
+    bestCl_list : int array, shape = (n_clusters,)
+        List of cluster index, from most enriched to least.
+    """
+    enriched,_,_,_ = getEnriched(enr_dir)
+    
+    bestScore_sort = enriched.sort_values('Combined Score', ascending=False)
+    items = bestScore_sort.iloc[:,0]
+    bestCl_list = list(dict.fromkeys(items))
+    return bestCl_list
+
+def getEnrich_cl(enr_dir, cl, score_th=300):
+    """Get the enrichment analysis results for one cluster.
+    
+    Parameters
+    ----------
+    enr_dir : string
+        Path to the directory containing the enrichment analysis results for all 
+        clusters.
+    
+    cl : int
+        Index of the cluster for which to get the enrichment results.
+        
+    score_th : int or None, default = 300
+        Combined Score threshold above which a term is considered as enriched.
+        If `None` all terms are returned.
+        
+    Returns
+    -------
+    enr_cl : pandas DataFrame,  shape(n_enriched_term, 10)
+        All the enriched terms in the cluster with : 
+            - `Gene_set` : data base used to run enrichment analysis
+            - `Term` : enriched term name
+            - `Overlap`
+            - `P-value`
+            - `Adjusted P-value`
+            - `Old P-value`
+            - `Old Adjusted P-value`
+            - `Odds Ratio`
+            - `Combined Score`
+            - `Genes` : set of genses in the cluster and in the enriched term
+            
+    enr_genes : string array, shape=(n_genes_enrich,)
+        Only returned if `score_th != None`. List of genes in the contributing to 
+        the enriched terms.
+        
+    cl_genes : string array, shape=(n_genes_cl,)
+        List of genes in the cluster.
+    """
+    enr_cl_dir = enr_dir.split('/')[-1]+'_'+str(cl)
+    enr_cl_path = os.path.join(enr_dir, enr_cl_dir)
+    
+    for root, dirs, files in os.walk(enr_cl_path, topdown=False):
+        for f in files:
+            if "enrichr.reports" in f:
+                break
+               
+    enr_cl_file = os.path.join(enr_cl_path,f)
+    enr_cl = pd.read_csv(enr_cl_file, sep='\t').sort_values('Combined Score',
+                                                            ascending=False)
+    
+    mm_file_list = enr_dir.split('/')
+    mm_file_list.pop(-2)
+    mm_file = '/'.join(mm_file_list)+'.csv'
+    mm = pd.read_csv(mm_file, index_col=0)
+    cl_genes = np.sort(mm.loc[mm.iloc[:,cl]==1,:].index)
+    
+    if type(score_th)==type(None):
+        return enr_cl, cl_genes
+    
+    enr_cl = enr_cl.loc[enr_cl.loc[:,'Combined Score']>score_th,:]
+    enr_genes = np.unique(';'.join(enr_cl.iloc[:,-1]).split(';'))
+    return enr_cl, enr_genes, cl_genes
+
