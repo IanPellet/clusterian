@@ -354,3 +354,27 @@ def getEnrich_cl(enr_dir, cl, score_th=300):
     enr_genes = np.unique(';'.join(enr_cl.iloc[:,-1]).split(';'))
     return enr_cl, enr_genes, cl_genes
 
+def getBest_cluster_list_all(enr_dir='./MembMatrix/Enrich/'):
+    """Get the list of most enriched clusters for all clustering solutions.
+    
+    Parameters
+    ----------
+    enr_dir : string
+        Path to the directory containing the enrichment analysis results for all 
+        clustering solutions.
+    Returns
+    -------
+    bestCl_dict : dict {string:int array}, length = n_solutions
+        List of cluster index, from most enriched to least for each clustering 
+        solution.
+    """
+    all_def = getAll_enr_def(enr_dir)
+    
+    bestCl_dict = {}
+    
+    for i in all_def.index:
+        Prefix = all_def.at[i,'Prefix']
+        bestCl_dict[Prefix] = getBest_cluster_list(all_def.at[i,'File'])
+        #print(Prefix,':',bestCl_dict[Prefix])
+        
+    return bestCl_dict
