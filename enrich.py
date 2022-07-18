@@ -362,6 +362,7 @@ def getBest_cluster_list_all(enr_dir='./MembMatrix/Enrich/'):
     enr_dir : string
         Path to the directory containing the enrichment analysis results for all 
         clustering solutions.
+        
     Returns
     -------
     bestCl_dict : dict {string:int array}, length = n_solutions
@@ -378,3 +379,71 @@ def getBest_cluster_list_all(enr_dir='./MembMatrix/Enrich/'):
         #print(Prefix,':',bestCl_dict[Prefix])
         
     return bestCl_dict
+
+def getBest_cl_enr(keys, bestCl_dict, n_cl=1, enr_dir='./MembMatrix/Enrich/',
+                   score_th=1000):
+    """Get the enriched terms of the `n_cl` best clusters for solutions in `keys`.
+    
+    Parameters
+    ----------
+    keys : string array, shape = (n_solutions,)
+        Prefixes of the files for the solutions to analyse.
+    bestCl_dict : dict {string:int array}, length = n_solutions
+        List of cluster index, from most enriched to least for each clustering 
+        solution. 
+    n_cl : int, default = 1
+        Number of clusters to analyse per solution.
+    enr_dir : string
+        Path to the directory containing the enrichment analysis results for all 
+        clustering solutions.    
+    score_th : int or None, default = 300
+        Combined Score threshold above which a term is considered as enriched.
+        If `None` all terms are returned.
+       
+    Returns
+    -------
+    enr : 2D pandas DataFrame array, shape = (n_solutions, n_cl)
+        Dataframes giving the enrichment analysis results for the enriched terms of
+        the `n_cl` best clusters of each solution in `keys`.
+    cover : 2D float array, shape = (n_solutions, n_cl)
+        Number of genes in enriched terms compared to total number of genes in the
+        cluster for each of the `n_cl` best clusters of each solution in `keys`.
+    GO : 2D string array, shape = (n_solutions, n_cl)
+        GeneOntology ids of enriched terms for each of the `n_cl` best clusters of 
+        each solution in `keys`.
+    """
+    all_enr_def = getAll_enr_def(enr_dir)
+    
+    enr = []
+    cover = [] 
+    GO = []
+
+    prefix = all_enr_def.loc[:,'Prefix']
+    for key in keys:
+        try:
+            dir_ = all_enr_def.loc[prefix==key,'File']
+
+            enr_ = []
+            cover_ = []
+            GO_ = []
+            for i in range(n_cl):
+                cl = bestCl_dict[key][i]
+                enr_cli, enr_genes, cl_genes = getEnrich_cl(dir_.values[0], cl, score_th)
+
+                GO_i = []
+                for t in enr_cli.loc[:,'Term']:
+                    GO_i.append(t.split(' ')[-1][1:-1])
+
+                enr_.append(enr_cli)
+                cover_.append(len(enr_genes)/len(cl_genes))
+                GO_.append(', '.join(GO_i))
+            enr.append(enr_)
+            cover.append(cover_)
+            GO.append(GO_)
+        except KeyError:
+            print(f'Best cluster not found for {key}.')
+            enr.append([])
+            cover.append([])
+            GO.append([])
+        
+    return enr, cover, GO
