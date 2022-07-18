@@ -50,7 +50,7 @@ def runEnrichr(modules, desc, gene_sets='GO_Biological_Process_2021', out_dir='~
     #return minAdjPval
     return od
 
-def getEnriched(enr_dir, score_th = 300, genes=None):
+def getEnriched(enr_dir, score_th=300, genes=None, pval=None):
     """Create and return a DataFrame of all the enriched terms in each cluster.
     
     Parameters :
@@ -62,8 +62,12 @@ def getEnriched(enr_dir, score_th = 300, genes=None):
     score_th : int, default=300
         Combined Score threshold above which a term is considered as enriched.
     
-    genes : array, shape=(n_genes,)
+    genes : array, shape = (n_genes,)
         List of all genes in the dataset.
+        
+    pval : float, default = None
+        If `pval` if given, `score_th` is not used, instead the adjusted p-value
+        threshold is used to evaluate enriched terms.
         
     Returns :
     -------
@@ -97,7 +101,10 @@ def getEnriched(enr_dir, score_th = 300, genes=None):
             path = os.path.join(root, name)
             full_tab = pd.read_csv(path, sep='\t')
             try :
-                enr_tab = full_tab.loc[full_tab.loc[:,'Combined Score']>score_th,:]
+                if type(pval)==type(None):
+                    enr_tab = full_tab.loc[full_tab.loc[:,'Combined Score']>score_th,:]
+                else:
+                    enr_tab = full_tab.loc[full_tab.loc[:,'Adjusted P-value']<pval,:]
                 new_col = pd.Series([cl]*enr_tab.shape[0], index=enr_tab.index,
                                 dtype=int)
                 enriched_.append(pd.concat([new_col,enr_tab], axis=1))
@@ -204,7 +211,7 @@ def getAll_enr_def(enr_path = './MembMatrix/Enrich/'):
     all_def = pd.concat(all_def_list)
     return all_def
 
-def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300):
+def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300, pval=None):
     """Get cluster evaluation according to enrichment results in `enr_path`.
 
     Parameters
@@ -218,6 +225,10 @@ def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300):
         
     score_th : int, default=300
         Combined Score threshold above which a term is considered as enriched.
+        
+    pval : float, default = None
+        If `pval` if given, `score_th` is not used, instead the adjusted p-value
+        threshold is used to evaluate enriched terms.
         
     Returns
     -------
@@ -241,7 +252,7 @@ def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300):
     ri = []
     for i in all_enr.index:
         data = datasets[all_enr.at[i,'Dataset']]
-        _, _, rCi, rGi = getEnriched(all_enr.at[i,'File'],score_th,genes=data.index)
+        _, _, rCi, rGi = getEnriched(all_enr.at[i,'File'],score_th,genes=data.index, pval=pval)
         
 #        if False:
 #            try :
@@ -271,7 +282,7 @@ def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300):
     #return evalEnr_sorted
     return evalEnr_all
 
-def getBest_cluster_list(enr_dir):
+def getBest_cluster_list(enr_dir, pval=False):
     """Get the list of most enriched clusters according to combined score.
     
     Parameters
@@ -279,6 +290,10 @@ def getBest_cluster_list(enr_dir):
     enr_dir : string
         Path to the directory containing the enrichment analysis results for all 
         clusters.
+    pval : Boolean, default = False
+        If True, the enrichment terms are sorted according to the adjusted p-value
+        instead of the combined score.
+        
     Returns
     -------
     bestCl_list : int array, shape = (n_clusters,)
@@ -286,12 +301,15 @@ def getBest_cluster_list(enr_dir):
     """
     enriched,_,_,_ = getEnriched(enr_dir)
     
-    bestScore_sort = enriched.sort_values('Combined Score', ascending=False)
+    if pval:
+        bestScore_sort = enriched.sort_values('Adjusted P-value', ascending=True)
+    else:
+        bestScore_sort = enriched.sort_values('Combined Score', ascending=False)
     items = bestScore_sort.iloc[:,0]
     bestCl_list = list(dict.fromkeys(items))
     return bestCl_list
 
-def getEnrich_cl(enr_dir, cl, score_th=300):
+def getEnrich_cl(enr_dir, cl, score_th=300, pval=None):
     """Get the enrichment analysis results for one cluster.
     
     Parameters
@@ -306,6 +324,10 @@ def getEnrich_cl(enr_dir, cl, score_th=300):
     score_th : int or None, default = 300
         Combined Score threshold above which a term is considered as enriched.
         If `None` all terms are returned.
+        
+    pval : float, default = None
+        If `pval` if given, `score_th` is not used, instead the adjusted p-value
+        threshold is used to evaluate enriched terms.
         
     Returns
     -------
@@ -347,14 +369,17 @@ def getEnrich_cl(enr_dir, cl, score_th=300):
     mm = pd.read_csv(mm_file, index_col=0)
     cl_genes = np.sort(mm.loc[mm.iloc[:,cl]==1,:].index)
     
-    if type(score_th)==type(None):
+    if type(score_th)==type(None) and type(pval)==type(None):
         return enr_cl, cl_genes
     
-    enr_cl = enr_cl.loc[enr_cl.loc[:,'Combined Score']>score_th,:]
+    if type(pval)==type(None):
+        enr_cl = enr_cl.loc[enr_cl.loc[:,'Combined Score']>score_th,:]
+    else:
+        enr_cl = enr_cl.loc[enr_cl.loc[:,'Adjusted P-value']<pval,:]
     enr_genes = np.unique(';'.join(enr_cl.iloc[:,-1]).split(';'))
     return enr_cl, enr_genes, cl_genes
 
-def getBest_cluster_list_all(enr_dir='./MembMatrix/Enrich/'):
+def getBest_cluster_list_all(enr_dir='./MembMatrix/Enrich/', pval=False):
     """Get the list of most enriched clusters for all clustering solutions.
     
     Parameters
@@ -362,6 +387,9 @@ def getBest_cluster_list_all(enr_dir='./MembMatrix/Enrich/'):
     enr_dir : string
         Path to the directory containing the enrichment analysis results for all 
         clustering solutions.
+    pval : float, default = None
+        If `pval` if given, `score_th` is not used, instead the adjusted p-value
+        threshold is used to evaluate enriched terms.
         
     Returns
     -------
@@ -375,13 +403,14 @@ def getBest_cluster_list_all(enr_dir='./MembMatrix/Enrich/'):
     
     for i in all_def.index:
         Prefix = all_def.at[i,'Prefix']
-        bestCl_dict[Prefix] = getBest_cluster_list(all_def.at[i,'File'])
+        bestCl_dict[Prefix] = getBest_cluster_list(all_def.at[i,'File'], 
+                                                   pval=pval)
         #print(Prefix,':',bestCl_dict[Prefix])
         
     return bestCl_dict
 
 def getBest_cl_enr(keys, bestCl_dict, n_cl=1, enr_dir='./MembMatrix/Enrich/',
-                   score_th=1000):
+                   score_th=1000, pval=None):
     """Get the enriched terms of the `n_cl` best clusters for solutions in `keys`.
     
     Parameters
@@ -399,6 +428,9 @@ def getBest_cl_enr(keys, bestCl_dict, n_cl=1, enr_dir='./MembMatrix/Enrich/',
     score_th : int or None, default = 300
         Combined Score threshold above which a term is considered as enriched.
         If `None` all terms are returned.
+    pval : float, default = None
+        If `pval` if given, `score_th` is not used, instead the adjusted p-value
+        threshold is used to evaluate enriched terms.
        
     Returns
     -------
@@ -428,15 +460,18 @@ def getBest_cl_enr(keys, bestCl_dict, n_cl=1, enr_dir='./MembMatrix/Enrich/',
             GO_ = []
             for i in range(n_cl):
                 cl = bestCl_dict[key][i]
-                enr_cli, enr_genes, cl_genes = getEnrich_cl(dir_.values[0], cl, score_th)
-
+                enr_cli, enr_genes, cl_genes = getEnrich_cl(dir_.values[0], cl,
+                                                            score_th, pval=pval)
+                #print(enr_genes)
+                if len(enr_genes[0])==0:
+                    enr_genes = []
                 GO_i = []
                 for t in enr_cli.loc[:,'Term']:
                     GO_i.append(t.split(' ')[-1][1:-1])
 
                 enr_.append(enr_cli)
                 cover_.append(len(enr_genes)/len(cl_genes))
-                GO_.append(', '.join(GO_i))
+                GO_.append(','.join(GO_i))
             enr.append(enr_)
             cover.append(cover_)
             GO.append(GO_)
