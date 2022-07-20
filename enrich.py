@@ -351,14 +351,14 @@ def getEnrich_cl(enr_dir, cl, score_th=300, pval=None):
     cl_genes : string array, shape=(n_genes_cl,)
         List of genes in the cluster.
     """
-    enr_cl_dir = enr_dir.split('/')[-1]+'_'+str(cl)
+    enr_cl_dir = enr_dir.split('/')[-1]+'_'+str(int(cl))
     enr_cl_path = os.path.join(enr_dir, enr_cl_dir)
-    
+
     for root, dirs, files in os.walk(enr_cl_path, topdown=False):
         for f in files:
             if "enrichr.reports" in f:
                 break
-               
+
     enr_cl_file = os.path.join(enr_cl_path,f)
     enr_cl = pd.read_csv(enr_cl_file, sep='\t').sort_values('Combined Score',
                                                             ascending=False)
@@ -379,7 +379,7 @@ def getEnrich_cl(enr_dir, cl, score_th=300, pval=None):
     enr_genes = np.unique(';'.join(enr_cl.iloc[:,-1]).split(';'))
     return enr_cl, enr_genes, cl_genes
 
-def getBest_cluster_list_all(enr_dir='./MembMatrix/Enrich/', pval=False):
+def getBest_cluster_list_all(enr_dir='./MembMatrix/Enrich/', pval=None, cover=False):
     """Get the list of most enriched clusters for all clustering solutions.
     
     Parameters
@@ -403,7 +403,11 @@ def getBest_cluster_list_all(enr_dir='./MembMatrix/Enrich/', pval=False):
     
     for i in all_def.index:
         Prefix = all_def.at[i,'Prefix']
-        bestCl_dict[Prefix] = getBest_cluster_list(all_def.at[i,'File'], 
+        if cover:
+            bestCl_dict[Prefix] = getBest_cluster_cover(all_def.at[i,'File'], 
+                                                   pval=pval)
+        else:
+            bestCl_dict[Prefix] = getBest_cluster_list(all_def.at[i,'File'], 
                                                    pval=pval)
         #print(Prefix,':',bestCl_dict[Prefix])
         
@@ -459,18 +463,24 @@ def getBest_cl_enr(keys, bestCl_dict, n_cl=1, enr_dir='./MembMatrix/Enrich/',
             cover_ = []
             GO_ = []
             for i in range(n_cl):
+                if i>=len(bestCl_dict[key]):
+                    break
                 cl = bestCl_dict[key][i]
-                enr_cli, enr_genes, cl_genes = getEnrich_cl(dir_.values[0], cl,
-                                                            score_th, pval=pval)
-                #print(enr_genes)
-                if len(enr_genes[0])==0:
-                    enr_genes = []
+                if type(score_th)==type(None) and type(pval)==type(None):
+                    enr_cli, _ = getEnrich_cl(dir_.values[0], cl, score_th, pval=pval)
+                else:
+                    enr_cli, enr_genes, cl_genes = getEnrich_cl(dir_.values[0], cl,
+                                                                score_th, pval=pval)
+                    cover_.append(len(enr_genes)/len(cl_genes))
+                    if len(enr_genes[0])==0:
+                        enr_genes = []
+                
                 GO_i = []
                 for t in enr_cli.loc[:,'Term']:
                     GO_i.append(t.split(' ')[-1][1:-1])
 
                 enr_.append(enr_cli)
-                cover_.append(len(enr_genes)/len(cl_genes))
+                
                 GO_.append(','.join(GO_i))
             enr.append(enr_)
             cover.append(cover_)
@@ -482,3 +492,45 @@ def getBest_cl_enr(keys, bestCl_dict, n_cl=1, enr_dir='./MembMatrix/Enrich/',
             GO.append([])
         
     return enr, cover, GO
+
+
+def getBest_cluster_cover(enr_dir, pval=0.05):
+    """Get the list of most enriched clusters according to coverage.
+    
+    Parameters
+    ----------
+    enr_dir : string
+        Path to the directory containing the enrichment analysis results for all 
+        clusters.
+    pval : Boolean, default = False
+        If True, the enrichment terms are sorted according to the adjusted p-value
+        instead of the combined score.
+        
+    Returns
+    -------
+    bestCl_list : int array, shape = (n_clusters,)
+        List of cluster index, from most enriched to least.
+    """
+
+    cover = []
+    cl_ = []
+    cl = 0
+    cond = True
+    while cond:
+        #print(cl)
+        try :
+            enr_cl, enr_genes, cl_genes = getEnrich_cl(enr_dir, cl, pval=pval)
+            cover.append(len(enr_genes)/len(cl_genes))
+            cl_.append(cl)
+            cl += 1
+        except UnboundLocalError:
+            cond = False
+            
+    df = pd.DataFrame(cover, columns=['cv'], index=cl_)
+    bestScore_sort = df.sort_values('cv', ascending=False)
+    items = bestScore_sort.index
+    bestCl_list = [int(i) for i in items]
+    #print(bestCl_list)
+    return bestCl_list
+
+
