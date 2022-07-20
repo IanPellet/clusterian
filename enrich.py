@@ -534,3 +534,74 @@ def getBest_cluster_cover(enr_dir, pval=0.05):
     return bestCl_list
 
 
+def CLEAN(sol, mm_dir='./MembMatrix/', enr_dir='Enrich', pval=0.1):
+    """Get gene-wise CLEAN score for clustering solutions in sol.
+    
+    Parameters :
+    ----------
+    sol : string array, len = n_sol
+        List of prefixes of the clustering solutions in `mm_dir` for which to
+        compute CLEAN score.
+        
+    mm_dir : string, default = './MembMatrix/'
+        Path to the directory in which to find the membership matrices for the 
+        solutions to evaluate. The membership matrix files must be named as 
+        `prefix.csv`, with prefix corresponding to what's given in list `sol`.
+        
+    enr_dir : string, default = 'Enrich'
+        Name of the subdirectory of `mm_dir` in which to find enrichment analysis 
+        results of solutions in `sol`. 
+        
+    pval : float, default = 0.1
+        Cutoff p-value above which the enrichment in one term is not considered as
+        statisticaly significant.
+        
+    
+    Returns : 
+    -------
+    CLEAN : float array, len = n_genes
+        List of gene-wise CLEAN score given in the same order as the genes in the
+        membership matrix.
+        
+        
+    """
+    mm_file = os.path.join(mm_dir,sol+'.csv')
+    enr_path = os.path.join(mm_dir,enr_dir,sol)
+    mm = misc.load_mm(mm_file)
+    mm.columns = [i for i in range(mm.shape[1])]
+    all_genes = mm.index
+    
+    enr = getEnriched(enr_path, score_th=None, genes=all_genes, pval=pval)[0]
+    
+    if type(enr)==type(None):
+        raise Exception(f'No enrichment analysis results found for {sol}.')
+    
+    func_cat = np.unique(enr.loc[:,'Term'])
+    clusters = mm.columns
+    p = pd.DataFrame(1, columns=func_cat, index=[int(c) for c in clusters])
+    gene_cat = pd.DataFrame(0, columns=func_cat, index=all_genes)
+    
+    for i in range(enr.shape[0]):
+        line = enr.iloc[i,:]
+        cl = line['Cluster']
+        term = line['Term']
+        genes = line['Genes'].split(';')
+        q = line['Adjusted P-value']
+        p.at[cl,term]=q
+        for g in genes:
+            gene_cat.at[g,term]=1
+            
+    CLEAN = []
+    for g in all_genes:
+        inCl = mm.columns[mm.loc[g,:]==1]
+        inCat = gene_cat.columns[gene_cat.loc[g,:]==1]
+        pij = []
+        for i in inCl:
+            for j in inCat:
+                pij.append(p.loc[i,j])
+        if len(pij)==0:
+            CLEAN.append(0)
+        else:
+            CLEAN.append(np.max(-np.log10(pij)))
+            
+    return CLEAN
