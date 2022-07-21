@@ -747,7 +747,7 @@ def plot_clustCLEAN(cCLEAN_df, n_pts=100, yscale='log', alpha=0.5, leg=False):
         Plot points for CLEAN score (x axis).
         
     ydf : pandas DataFrame, shape = (n_clusters, n_pts)
-        Number of genes with CLEAN score greater or equal to x.
+        Number of genes with CLEAN score greater or equal to x for all clusters.
     """
     n = cCLEAN_df.shape[1]
     colors = pl.cm.jet(np.linspace(0,1,n))
@@ -773,3 +773,60 @@ def plot_clustCLEAN(cCLEAN_df, n_pts=100, yscale='log', alpha=0.5, leg=False):
     plt.show()
     
     return x,ydf
+
+def getBest_cCLEAN(ydf, q=0.95, cutLow=0.40, cutHigh=0.75, plot=True, plot_all=True,
+                   alpha=1):
+    """Get the best clusters according to cCLEAN.
+    
+    Parameters :
+    ----------
+    ydf : pandas DataFrame, shape = (n_clusters, n_pts)
+        Number of genes with CLEAN score greater or equal to x for all clusters.
+        
+    q : float, 0<q<1, default = 0.95
+        Quantile above which to keep cluster.
+        
+    cutLow : float, default = 0.40
+        Part of CLEAN score threshold values above which to keep.
+        
+    cutHigh : float, default = 0.75
+        Part of CLEAN score threshold values under which to keep.
+        
+    plot : bool, default = True
+        Whether or not to plot the best clusters.
+        
+    plot_all : bool, default = True
+        Whether or not to plot all the clusters (in black).
+        
+    alpha : float in [0,1], default = 0.9
+        Alpha parameter for the plot function.
+        
+    Returns :
+    -------
+    Y_best_ : pandas DataFrame, shape = (n_best, n_pts)
+        Number of genes with CLEAN score greater or equal to x for best clusters.
+    """
+    Yquantile =  np.quantile(ydf.fillna(0), q, axis=0)
+    Ydist = ydf-Yquantile
+    
+    iLow = int(Ydist.shape[1]*cutLow)
+    iHigh = int(Ydist.shape[1]*cutHigh)
+    Ysum = np.sum(Ydist.iloc[:,iLow:iHigh]>0, axis=1)
+    
+    best_i_ = np.where(Ysum==max(Ysum))[0]
+    Y_best_ = ydf.iloc[best_i_,:]
+    
+    n = len(best_i_)
+    colors = pl.cm.jet(np.linspace(0,1,n))
+    j = 0
+    if plot:
+        for i in range(ydf.shape[0]):
+            if i in best_i_:
+                plt.plot((ydf.iloc[i,:]), color=colors[j], label=ydf.index[i], alpha=alpha)
+                j+=1
+            elif plot_all:
+                plt.plot(ydf.iloc[i,:], 'k', alpha=0.2)
+        plt.yscale('log')
+        plt.legend()
+        
+    return Y_best_
