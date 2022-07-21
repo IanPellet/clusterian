@@ -4,6 +4,8 @@ import numpy as np
 import os
 from . import misc
 from math import sqrt
+import matplotlib.pyplot as plt
+import matplotlib.pylab as pl
 
 def runEnrichr(modules, desc, gene_sets='GO_Biological_Process_2021', out_dir='~/Documents/Clustering/ModuleMatrix/Enrich/'):
     """Run enrichment analysis on all clusters, returns output directory.
@@ -647,7 +649,7 @@ def multiCLEAN(sol_, mm_dir='./MembMatrix/', enr_dir='Enrich', pval=0.1,
     Returns : 
     -------
     CLEAN_df : pandas DataFrame, shape = (n_sol, n_genes)
-        List of gene-wise CLEAN score given in the same order as the genes in the
+        List of gene-wise CLEAN scores given in the same order as the genes in the
         membership matrix.
         
     cCLEAN : pandas DataFrame list, shape = (n_sol, n_genes, n_clusters)
@@ -679,3 +681,41 @@ def multiCLEAN(sol_, mm_dir='./MembMatrix/', enr_dir='Enrich', pval=0.1,
     
     return CLEAN_df, cCLEAN_
         
+    
+def plot_multiCLEAN(CLEAN_df, n_pts=100, yscale='log', alpha=0.9):
+    """Plot the number of genes with CLEAN score above x for each solution.
+    
+    
+    Parameters :
+    ----------
+    CLEAN_df : pandas DataFrame, shape = (n_sol, n_genes)
+        List of gene-wise CLEAN scores.
+        
+    n_pts : int, default = 100
+        Number of points x on which to plot.
+        
+    yscale : {"linear", "log", "symlog", "logit", ...}, default = 'log'
+        The axis scale type to apply to axis y.
+        
+    alpha : float in [0,1], default = 0.9
+        Alpha parameter for the plot function. 
+    """
+    n = CLEAN_df.shape[0]
+    colors = pl.cm.jet(np.linspace(0,1,n))
+
+
+    Mclean = CLEAN_df.to_numpy().max()
+    #print(Mclean)
+    x = np.linspace(1,Mclean,n_pts)
+    y = []
+    for i in range(n):
+        clean = np.array(CLEAN_df.iloc[i,:])
+        y.append([sum(clean>=i) for i in x])
+        
+    for i in range(n):
+        plt.plot(x,y[i], alpha=alpha, color=colors[i])
+    plt.legend([i for i in CLEAN_df.index])
+    plt.yscale(yscale)
+    plt.xlabel('CLEAN score')
+    plt.ylabel('# genes with score >= x')
+    plt.show()
