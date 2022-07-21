@@ -534,27 +534,31 @@ def getBest_cluster_cover(enr_dir, pval=0.05):
     return bestCl_list
 
 
-def CLEAN(sol, mm_dir='./MembMatrix/', enr_dir='Enrich', pval=0.1):
-    """Get gene-wise CLEAN score for clustering solutions in sol.
+def CLEAN(sol, mm_dir='./MembMatrix/', enr_dir='Enrich', pval=0.1,
+          clustCLEAN=False):
+    """Get gene-wise CLEAN score for clustering solution in sol.
     
     Parameters :
     ----------
-    sol : string array, len = n_sol
-        List of prefixes of the clustering solutions in `mm_dir` for which to
-        compute CLEAN score.
+    sol : string
+        Prefixe of the clustering solution in `mm_dir` for which to compute CLEAN 
+        score.
         
     mm_dir : string, default = './MembMatrix/'
-        Path to the directory in which to find the membership matrices for the 
-        solutions to evaluate. The membership matrix files must be named as 
-        `prefix.csv`, with prefix corresponding to what's given in list `sol`.
+        Path to the directory in which to find the membership matrics for the 
+        solution to evaluate. The membership matrix files must be named as 
+        `prefix.csv`, with prefix corresponding to `sol`.
         
     enr_dir : string, default = 'Enrich'
         Name of the subdirectory of `mm_dir` in which to find enrichment analysis 
-        results of solutions in `sol`. 
+        results of solution `sol`. 
         
     pval : float, default = 0.1
         Cutoff p-value above which the enrichment in one term is not considered as
         statisticaly significant.
+        
+    clustCLEAN : bool, default = False
+        If `True`, the CLEAN score of clusters is also computed.
         
     
     Returns : 
@@ -563,7 +567,9 @@ def CLEAN(sol, mm_dir='./MembMatrix/', enr_dir='Enrich', pval=0.1):
         List of gene-wise CLEAN score given in the same order as the genes in the
         membership matrix.
         
-        
+    cCLEAN : pandas DataFrame, shape = (n_genes, n_clusters)
+        Dataframe of CLEAN score given for each gene in each cluster. Only returned 
+        if `clustCLEAN = True`.
     """
     mm_file = os.path.join(mm_dir,sol+'.csv')
     enr_path = os.path.join(mm_dir,enr_dir,sol)
@@ -604,4 +610,72 @@ def CLEAN(sol, mm_dir='./MembMatrix/', enr_dir='Enrich', pval=0.1):
         else:
             CLEAN.append(np.max(-np.log10(pij)))
             
-    return CLEAN
+    if not clustCLEAN:
+        return CLEAN
+    
+    cCLEAN = mm.multiply(CLEAN, axis=0)
+
+    return CLEAN, cCLEAN
+
+def multiCLEAN(sol_, mm_dir='./MembMatrix/', enr_dir='Enrich', pval=0.1,
+               clustCLEAN=False, genes=None):
+    """Get CLEAN score for all clustering solutions in sol.
+    
+    Parameters :
+    ----------
+    sol : string array, len = n_sol
+        List of prefixes of the clustering solutions in `mm_dir` for which to
+        compute CLEAN score.
+        
+    mm_dir : string, default = './MembMatrix/'
+        Path to the directory in which to find the membership matrices for the 
+        solutions to evaluate. The membership matrix files must be named as 
+        `prefix.csv`, with prefix corresponding to what's given in list `sol`.
+        
+    enr_dir : string, default = 'Enrich'
+        Name of the subdirectory of `mm_dir` in which to find enrichment analysis 
+        results of solutions in `sol`. 
+        
+    pval : float, default = 0.1
+        Cutoff p-value above which the enrichment in one term is not considered as
+        statisticaly significant.
+        
+    clustCLEAN : bool, default = False
+        If `True`, the CLEAN score of clusters is also computed.
+        
+    
+    Returns : 
+    -------
+    CLEAN_df : pandas DataFrame, shape = (n_sol, n_genes)
+        List of gene-wise CLEAN score given in the same order as the genes in the
+        membership matrix.
+        
+    cCLEAN : pandas DataFrame list, shape = (n_sol, n_genes, n_clusters)
+        List of dataframes containing cluster-wise CLEAN scores for each solution.
+        Only returned if `clustCLEAN = True`.
+    """
+    CLEAN_ = []
+    cCLEAN_ = []
+    for sol in sol_:
+        if clustCLEAN:
+            clean, cclean  = CLEAN(sol, mm_dir=mm_dir, enr_dir=enr_dir, pval=pval,
+                                   clustCLEAN=clustCLEAN)
+            
+            cCLEAN_.append(cclean)
+        else:
+            clean  = CLEAN(sol, mm_dir=mm_dir, enr_dir=enr_dir, pval=pval,
+                           clustCLEAN=clustCLEAN)
+        CLEAN_.append(clean)
+        
+    if type(genes)!=type(None):
+        CLEAN_df = pd.DataFrame(CLEAN_, index=sol_, 
+                                columns=pd.Series(genes, name='Genes'))
+    else:
+        CLEAN_df = pd.DataFrame(CLEAN_, index=sol_)
+    
+    if not clustCLEAN:
+        return CLEAN_df
+    
+    
+    return CLEAN_df, cCLEAN_
+        
