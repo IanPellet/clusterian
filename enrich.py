@@ -615,7 +615,7 @@ def CLEAN(sol, mm_dir='./MembMatrix/', enr_dir='Enrich', pval=0.1,
     if not clustCLEAN:
         return CLEAN
     
-    cCLEAN = mm.multiply(CLEAN, axis=0)
+    cCLEAN = mm.replace(0,None).multiply(CLEAN, axis=0)
 
     return CLEAN, cCLEAN
 
@@ -719,3 +719,57 @@ def plot_multiCLEAN(CLEAN_df, n_pts=100, yscale='log', alpha=0.9):
     plt.xlabel('CLEAN score')
     plt.ylabel('# genes with score >= x')
     plt.show()
+    
+
+def plot_clustCLEAN(cCLEAN_df, n_pts=100, yscale='log', alpha=0.5, leg=False):
+    """Plot the number of genes with CLEAN score above x for each cluster.
+    
+    Parameters :
+    ----------
+    cCLEAN_df : pandas DataFrame list, shape = (n_sol, n_genes, n_clusters)
+        List of dataframes containing cluster-wise CLEAN scores for each solution.
+        
+    n_pts : int, default = 100
+        Number of points x on which to plot.
+        
+    yscale : {"linear", "log", "symlog", "logit", ...}, default = 'log'
+        The axis scale type to apply to axis y.
+        
+    alpha : float in [0,1], default = 0.9
+        Alpha parameter for the plot function. 
+        
+    lef : bool, default = False
+        Whether or not to display legend.
+        
+    Returns :
+    -------
+    x : float array, len = n_pts
+        Plot points for CLEAN score (x axis).
+        
+    ydf : pandas DataFrame, shape = (n_clusters, n_pts)
+        Number of genes with CLEAN score greater or equal to x.
+    """
+    n = cCLEAN_df.shape[1]
+    colors = pl.cm.jet(np.linspace(0,1,n))
+    
+    Mclean = cCLEAN_df.fillna(0).to_numpy().max()
+    x = np.linspace(1,Mclean,n_pts)
+    y = []
+    for i in range(n):
+        cclean = cCLEAN_df.iloc[:,i]
+        n_genes = sum(abs(np.isnan(cclean.to_list())-1))
+        clean = np.array(cclean)
+        y.append([sum(clean>i)/n_genes for i in x])
+
+    ydf = pd.DataFrame(y, index=cCLEAN_df.columns)
+    ydf = ydf.replace(0,None)
+    for i in range(n):
+        plt.plot(x,ydf.iloc[i,:], alpha=alpha, color=colors[i])
+    if leg:
+        plt.legend([i for i in cCLEAN_df.columns])
+    plt.yscale(yscale)
+    plt.xlabel('CLEAN score')
+    plt.ylabel('# genes with score >= x')
+    plt.show()
+    
+    return x,ydf
