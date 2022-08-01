@@ -24,33 +24,31 @@ def runEnrichr(modules, desc, gene_sets='GO_Biological_Process_2021', out_dir='~
     """
     od = os.path.join(out_dir, desc)
     os.makedirs(od, exist_ok=True)
-    mm_enrich = []
-    for i in range(modules.shape[1]):
-        # list, dataframe, series inputs are supported
-        genes = modules.loc[modules.iloc[:,i]==1,i].index.tolist()
-        if len(genes)>1:
-            #print(genes)
-            try :
-                enr = gp.enrichr(gene_list=genes,
-                                 gene_sets=gene_sets,
-                                 organism='Human', # don't forget to set organism to the one you desired! e.g. Yeast
-                                 description=desc,
-                                 outdir=os.path.join(od, desc+'_'+str(i)),
-                                 no_plot=True,
-                                 cutoff = 1
-                                )
-                mm_enrich.append(enr)
-            except Exception :
-                print("Cluster", i)
-            #else :
-            #    print("Cluster", i, ":", genes)
-            #minAdjPval.append(enr.results.loc[0,"Adjusted P-value"])
-        else:
-            mm_enrich.append(None)
-            #minAdjPval.append(1)
-        print("\r",round((i+1)/modules.shape[1]*100),"%",end="\r")
+    # Get subdirectories in od
+    od_content = []
+    for (dirpath, dirnames, filenames) in os.walk(od):
+        od_content.extend(dirnames)
+        break
         
-    #return minAdjPval
+    nenr = 0
+    for i in range(modules.shape[1]):
+        od_cl = desc+'_'+str(i)
+        if od_cl not in od_content:
+            genes = modules.loc[modules.iloc[:,i]==1,i].index.tolist()
+            if len(genes)>1:
+                try :
+                    enr = gp.enrichr(gene_list=genes,
+                                     gene_sets=gene_sets,
+                                     organism='Human', # don't forget to set organism to the one you desired! e.g. Yeast
+                                     description=desc,
+                                     outdir= os.path.join(od, od_cl),
+                                     no_plot=True,
+                                     cutoff = 1)
+                    nenr+=1
+                except Exception :
+                    print("Cluster", i)
+        print("\r{:.2f}%".format((i+1)/modules.shape[1]*100),end="\r")
+    print("Cluster analysed :", nenr)
     return od
 
 def getEnriched(enr_dir, score_th=300, genes=None, pval=None):
@@ -139,6 +137,7 @@ def runEnrichr_directory(mm_path = './MembMatrix', mm_enrich_dir = 'Enrich'):
     mm_path -- Path of the directory containing the membership matrices (default './ModuleMatrix')
     mm_enrich_dir -- Name of the directory where to output results (default 'mm_enrich_dir')
     """
+    # Check all the mm files
     mm_file_names = []
     dir_in_mm = []
     for (dirpath, dirnames, filenames) in os.walk(mm_path):
@@ -146,42 +145,41 @@ def runEnrichr_directory(mm_path = './MembMatrix', mm_enrich_dir = 'Enrich'):
         dir_in_mm.extend(dirnames)
         break
     
+    # Check is dir Enrich exist, if not create it
     enr_path = os.path.join(mm_path,mm_enrich_dir)
     if mm_enrich_dir not in dir_in_mm:
         os.makedirs(enr_path, exist_ok=True)
     
+    # Get subdirectories in enr_path
     enr_dir_content = []
     for (dirpath, dirnames, filenames) in os.walk(enr_path):
         enr_dir_content.extend(dirnames)
         break
 
     for filename in mm_file_names:
-        path = os.path.join(mm_path,filename)
-        #attr = filename.split('_')
-        #algo = attr[0]
-        #dataset = attr[1]
-        #if len(attr)>2:
-        #    parm = '_'.join(attr[2:])[:-4]
-
+        path = os.path.join(mm_path,filename) # path to mm
+        
+        # get preffix
         desc = filename.removesuffix('.csv')
         desc = desc.removesuffix('.txt')
 
-        if desc not in enr_dir_content:
-            print('Runing analysis on ', desc) 
-            
-            if path.split('.')[-1]=='txt':
-                f = open(path, 'br')
-                mm_sp, mm_i = pickle.load(f)
-                f.close()
-                mm = pd.DataFrame(mm_sp.todense(), index=mm_i)
-            else:
-                mm = misc.load_mm(path)
-            mm.columns = range(0,mm.shape[1])
+        #if desc not in enr_dir_content:
+        print('Runing analysis on ', desc) 
 
-            print('out_dir :', enr_path)
-            where_ = runEnrichr(mm, desc, gene_sets='GO_Biological_Process_2021', 
-                                       out_dir= enr_path)
-            print('Enrichment results in :', where_)
+        # if sparse mm, recreate DataFrame
+        if path.split('.')[-1]=='txt':
+            f = open(path, 'br')
+            mm_sp, mm_i = pickle.load(f)
+            f.close()
+            mm = pd.DataFrame(mm_sp.todense(), index=mm_i)
+        else:
+            mm = misc.load_mm(path)
+        mm.columns = range(0,mm.shape[1])
+
+        print('out_dir :', enr_path)
+        where_ = runEnrichr(mm, desc, gene_sets='GO_Biological_Process_2021', 
+                                   out_dir= enr_path)
+        print('Enrichment results in :', where_)
             
 def getAll_enr_def(enr_path = './MembMatrix/Enrich/'):
     """Get informations about enrichment directories in `enr_path`.
@@ -893,7 +891,12 @@ def cleanEnrDir(enr_dir):
         the different clustering solutions
     """
     for root, dirs, files in os.walk(enr_dir, topdown=False):
-        if len(dirs)==0 and len(files)==0:
+        if root.split('/')[-1]=='.ipynb_checkpoints':
+            for f in files:
+                os.remove(os.path.join(root,f))                                    
+            os.rmdir(root)
+            print('rmdir', root)
+        elif len(dirs)==0 and len(files)==0:
             os.rmdir(root)
             print('rmdir', root)
         else:
