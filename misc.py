@@ -168,10 +168,11 @@ def summary(mm=None, file_name=None):
     
     ppt = [n_clusters, max_cl_size, min_cl_size, mean_cl_size, med_cl_size, 
            n_empty_cl, n_1_cl, n_genes, max_cl, min_cl, mean_cl, med_cl, uncl_part,
-           cl0_part, in1cl_part]
+           cl0_part, in1cl_part, np.unique(cl_sizes)]
     names = ['n_clusters', 'max_cl_size', 'min_cl_size', 'mean_cl_size', 
              'med_cl_size', 'n_empty_cl', 'n_1_cl', 'n_genes', 'max_cl', 'min_cl',
-             'mean_cl', 'med_cl', 'uncl_part', 'uncl_WGCNA', 'in1cl_part']
+             'mean_cl', 'med_cl', 'uncl_part', 'uncl_WGCNA', 'in1cl_part', 
+             'cl_sizes']
     mm_summary = pd.DataFrame(ppt, index=names).T
     return mm_summary
 
@@ -241,7 +242,9 @@ def load_mm(file_name):
     """
     mm = pd.read_csv(file_name, header=None, index_col=0)
     if type(mm.index[0])!=str or len(mm.index[0])<2:
-        mm = pd.read_csv(file_name, header=0, index_col=0)        
+        mm = pd.read_csv(file_name, header=0, index_col=0)   
+        
+    mm.columns = [i for i in range(mm.shape[1])]
     return mm
     
 def cleanup(mm=None, file_name=None, save=False):
