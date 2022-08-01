@@ -6,6 +6,7 @@ from . import misc
 from math import sqrt
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pl
+import pickle
 
 def runEnrichr(modules, desc, gene_sets='GO_Biological_Process_2021', out_dir='~/Documents/Clustering/ModuleMatrix/Enrich/'):
     """Run enrichment analysis on all clusters, returns output directory.
@@ -163,13 +164,18 @@ def runEnrichr_directory(mm_path = './MembMatrix', mm_enrich_dir = 'Enrich'):
         #    parm = '_'.join(attr[2:])[:-4]
 
         desc = filename.removesuffix('.csv')
+        desc = desc.removesuffix('.txt')
 
         if desc not in enr_dir_content:
             print('Runing analysis on ', desc) 
-
-            mm = pd.read_csv(path, header=None, index_col=0)
-            if type(mm.index[0])!=str or len(mm.index[0])<2:
-                mm = pd.read_csv(path, header=0, index_col=0)
+            
+            if path.split('.')[-1]=='txt':
+                f = open(path, 'br')
+                mm_sp, mm_i = pickle.load(f)
+                f.close()
+                mm = pd.DataFrame(mm_sp.todense(), index=mm_i)
+            else:
+                mm = misc.load_mm(path)
             mm.columns = range(0,mm.shape[1])
 
             print('out_dir :', enr_path)
@@ -311,7 +317,7 @@ def getBest_cluster_list(enr_dir, pval=False):
     bestCl_list = list(dict.fromkeys(items))
     return bestCl_list
 
-def getEnrich_cl(enr_dir, cl, score_th=300, pval=None):
+def getEnrich_cl(enr_dir, cl, score_th=300, pval=None, mm=None):
     """Get the enrichment analysis results for one cluster.
     
     Parameters
@@ -353,33 +359,51 @@ def getEnrich_cl(enr_dir, cl, score_th=300, pval=None):
     cl_genes : string array, shape=(n_genes_cl,)
         List of genes in the cluster.
     """
+    if type(mm)==type(None):
+        mm_file_list = enr_dir.split('/')
+        mm_file_list.pop(-2)
+        mm_file = '/'.join(mm_file_list)+'.csv'
+        mm = pd.read_csv(mm_file, index_col=0)
+    cl_genes = np.sort(mm.loc[mm.iloc[:,cl]==1,:].index)
+    
     enr_cl_dir = enr_dir.split('/')[-1]+'_'+str(int(cl))
     enr_cl_path = os.path.join(enr_dir, enr_cl_dir)
+
+    dir_in_ = []
+    for (dirpath, dirnames, filenames) in os.walk(enr_dir):
+        dir_in_.extend(dirnames)
+        break
+ 
+    if enr_cl_dir not in dir_in_:
+        print(enr_cl_dir,'not in dir_in_')
+        return None,None,cl_genes
 
     for root, dirs, files in os.walk(enr_cl_path, topdown=False):
         for f in files:
             if "enrichr.reports" in f:
                 break
+    if len(files)!=0:
+        enr_cl_file = os.path.join(enr_cl_path,f)
+        enr_cl = pd.read_csv(enr_cl_file, sep='\t')
+        
+    if len(files)==0:
+        print('No files in', enr_cl_path)
+        return None,None,cl_genes
+    
+    #if type(score_th)==type(None) and type(pval)==type(None):
+    #    return enr_cl, cl_genes
 
-    enr_cl_file = os.path.join(enr_cl_path,f)
-    enr_cl = pd.read_csv(enr_cl_file, sep='\t').sort_values('Combined Score',
-                                                            ascending=False)
-    
-    mm_file_list = enr_dir.split('/')
-    mm_file_list.pop(-2)
-    mm_file = '/'.join(mm_file_list)+'.csv'
-    mm = pd.read_csv(mm_file, index_col=0)
-    cl_genes = np.sort(mm.loc[mm.iloc[:,cl]==1,:].index)
-    
-    if type(score_th)==type(None) and type(pval)==type(None):
-        return enr_cl, cl_genes
-    
-    if type(pval)==type(None):
-        enr_cl = enr_cl.loc[enr_cl.loc[:,'Combined Score']>score_th,:]
-    else:
-        enr_cl = enr_cl.loc[enr_cl.loc[:,'Adjusted P-value']<pval,:]
-    enr_genes = np.unique(';'.join(enr_cl.iloc[:,-1]).split(';'))
+    try:
+        if type(pval)==type(None):
+            enr_cl = enr_cl.loc[enr_cl.loc[:,'Combined Score']>score_th,:]
+        else:
+            enr_cl = enr_cl.loc[enr_cl.loc[:,'Adjusted P-value']<pval,:]
+        enr_genes = np.unique(';'.join(enr_cl.iloc[:,-1]).split(';'))
+    except KeyError:
+        print('KeyError on cl', cl)
+        return None, None, cl_genes
     return enr_cl, enr_genes, cl_genes
+
 
 def getBest_cluster_list_all(enr_dir='./MembMatrix/Enrich/', pval=None, cover=False):
     """Get the list of most enriched clusters for all clustering solutions.
@@ -822,7 +846,8 @@ def getBest_cCLEAN(ydf, q=0.95, cutLow=0.40, cutHigh=0.75, plot=True, plot_all=T
     if plot:
         for i in range(ydf.shape[0]):
             if i in best_i_:
-                plt.plot((ydf.iloc[i,:]), color=colors[j], label=ydf.index[i], alpha=alpha)
+                plt.plot((ydf.iloc[i,:]), color=colors[j], label=ydf.index[i],
+                         alpha=alpha)
                 j+=1
             elif plot_all:
                 plt.plot(ydf.iloc[i,:], 'k', alpha=0.2)
@@ -830,3 +855,31 @@ def getBest_cCLEAN(ydf, q=0.95, cutLow=0.40, cutHigh=0.75, plot=True, plot_all=T
         plt.legend()
         
     return Y_best_
+
+def getEnrich_cover(enr_dir, mm, pval=None, score=None):
+    if type(pval)==type(score):
+        raise Exception("One and only one of arguments `pval` and `score` must be specified")
+    
+    #print('Loading membership matrix...')
+    #mm = misc.load_mm(mm_file)
+    #print('Membership matrix loaded.')
+    #print('Dataframe initialisation..')
+    cover_df = pd.DataFrame(0, index=mm.columns, columns=['Cover', '# genes'])
+    #print('Dataframe initialized.')
+    for i,c in enumerate(cover_df.index):
+        #print(c)
+        #print('getEnrich...')
+        #print(enr_dir,c)
+        enr_cl, enr_genes, cl_genes = getEnrich_cl(enr_dir, c, pval=pval, score_th=score,
+                                                mm=mm)
+        #print(enr_genes)
+        #print('Done.')
+        if type(enr_genes)==type(None):
+            cover_df.loc[c,'Cover'] = None
+        else:
+            cover_df.loc[c,'Cover'] = len(enr_genes)/len(cl_genes)
+        cover_df.loc[c,'# genes'] = len(cl_genes)
+        print("\r",round((i+1)/len(cover_df.index)*100),"%",end="\r")
+    
+    return cover_df
+
