@@ -883,3 +883,25 @@ def getEnrich_cover(enr_dir, mm, pval=None, score=None):
     
     return cover_df
 
+def cleanEnrDir(enr_dir):
+    """Remove empty dirs and dirs with errors
+    
+    Parameters:
+    ----------
+    enr_dir : string
+        Path to the directory containing all the enrichment analysis results for
+        the different clustering solutions
+    """
+    for root, dirs, files in os.walk(enr_dir, topdown=False):
+        if len(dirs)==0 and len(files)==0:
+            os.rmdir(root)
+            print('rmdir', root)
+        else:
+            for f in files:
+                ext = f.split('.')[-1]
+                if ext=='log':
+                    for frm in files:
+                        os.remove(os.path.join(root,frm))                                    
+                    os.rmdir(root)
+                    print('rmdir', root)
+    return None
