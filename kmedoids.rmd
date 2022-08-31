@@ -1,0 +1,117 @@
+---
+title: "K-medoids"
+output: html_document
+date: '2022-06-09'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '~/Documents/data/')
+```
+```{r Libraries, echo=FALSE}
+library(cluster)
+```
+
+```{r RNA-seq data importation}
+# The following setting is important, do not omit.
+options(stringsAsFactors = FALSE)
+rna <- read.csv("DataRnaseq", header = T, sep = " ")
+
+dim(rna)
+names(rna)[1:10]
+typeof(rna)
+
+X <- as.matrix(t(rna))
+dim(X)
+```
+
+```{r}
+k_ <- seq(20,200,20)
+meanSil <- c()
+for (k in k_) {
+  rnaPam <- pam(X, k, diss = FALSE, pamonce = 6)
+  meanSil <- c(meanSil, mean(rnaPam$silinfo$widths[,3]))
+}
+```
+
+```{r}
+plot(k_, meanSil,'l')
+```
+
+
+```{r}
+barplot(rnaPam$silinfo$widths[,3], col = rnaPam$silinfo$widths[,1], border=NA)
+m <- mean(rnaPam$silinfo$widths[,3])
+abline(h=m)
+paste(m)
+barplot(rnaPam10$silinfo$widths[,3], col = rnaPam10$silinfo$widths[,1], border=NA)
+m <- mean(rnaPam10$silinfo$widths[,3])
+abline(h=m)
+paste(m)
+barplot(rnaPam40$silinfo$widths[,3], col = rnaPam40$silinfo$widths[,1], border=NA)
+m <- mean(rnaPam40$silinfo$widths[,3])
+abline(h=m)
+paste(m)
+```
+
+
+```{r}
+library(stats)
+# make an empty vector we'll populate via our loop
+wcss = vector()
+# for our 10 clusters we'll start with
+krange = 1:100
+for (i in krange) wcss[i] <- sum(kmeans(X, i, iter.max = 100)$withinss)
+plot(krange,
+     wcss,
+     type = 'b', # for lines and points
+     main = paste('The Elbow Method'),
+     xlab = 'Number of clusters',
+     ylab = 'WCSS')
+```
+```{r}
+k <- 200
+rnaPam200 <- pam(X, k, diss = FALSE, pamonce = 6)
+save(rnaPam200, file="PAM_rna_200.RData")
+genes <- names(rnaPam200$clustering)
+mat <- data.frame(matrix(0, nrow = length(genes), ncol = k), row.names = genes)
+for (i in 1:length(genes)) {
+  mat[genes[i],rnaPam200$clustering[genes[i]]] <- 1 
+}
+mat
+```
+
+```{r}
+write.csv(mat, file = "PAM_rna_200.csv", row.names = TRUE)
+```
+
+```{r}
+g2v <- read.csv("gene2vec_dim_200_iter_9.csv", header = T, row.names = 1)
+
+dim(g2v)
+head(g2v)
+```
+
+```{r}
+runPamSave <- function(data, dName, k) {
+  filename <- paste("PAM",dName, as.character(k), sep = "_")
+  pam_ <- pam(data, k, diss = FALSE, pamonce = 6)
+  save(pam_, file = paste(filename, "RData", sep = "."))
+  genes <- names(pam_$clustering)
+  mat_ <- data.frame(matrix(0, nrow = length(genes), ncol = k), row.names = genes)
+  for (i in 1:length(genes)) {
+    mat_[genes[i],pam_$clustering[genes[i]]] <- 1 
+  }
+  write.csv(mat_, file = paste(filename, "csv", sep = "."), row.names = TRUE)
+  mat_
+}
+```
+
+```{r}
+data <- g2v
+dName <- "g2v"
+k <- 200
+pam_g2v_200 <- runPamSave(data, dName, k)
+```
+
+

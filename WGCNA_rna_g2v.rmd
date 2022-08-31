@@ -1,0 +1,368 @@
+---
+title: "WGCNA_rna_g2v"
+output: html_document
+date: '2022-06-16'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '~/Documents/Clustering/')
+```
+
+```{r Libraries}
+library(WGCNA)
+library(stringr)
+# Allow multi-threading within WGCNA. This helps speed up certain calculations.
+# At present this call is necessary for the code to work.
+# Any error here may be ignored but you may want to update WGCNA if you see one.
+# Caution: skip this line if you run RStudio or other third-party R environments.
+# See note above.
+enableWGCNAThreads()
+```
+```{r Functions}
+plotSft <- function(sft) {
+  # Plot the results:
+  sizeGrWindow(9, 5)
+  par(mfrow = c(1,2));
+  cex1 = 0.9;
+  # Scale-free topology fit index as a function of the soft-thresholding power
+  plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+  xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+  main = paste("Scale independence"));
+  text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+  labels=powers,cex=cex1,col="red");
+  # this line corresponds to using an R^2 cut-off of h
+  # abline(h=0.90,col="red")
+  # Mean connectivity as a function of the soft-thresholding power
+  plot(sft$fitIndices[,1], sft$fitIndices[,5],
+  xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+  main = paste("Mean connectivity"))
+  text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
+  sft$powerEstimate
+}
+
+toMembMatrix <- function(data, lab){
+  mat_ <- matrix(0, nrow = dim(data)[2], ncol = length(table(lab)))
+  df_ <- data.frame(mat_, row.names = colnames(data))
+  names(df_) <- names(table(lab))
+  
+  for (i in 1:length(lab)) {
+    df_[row.names(df_)==names(lab[i]), names(df_)==lab[i]] <- 1 
+  }
+  df_
+} 
+
+reclust0 <- function(mm, expr, pow = NULL){ 
+  #' Re-cluster genes in module 0 with WGCNA
+  #'
+  #' @param expr Full expression matrix
+  #' @param mm Membership matrix with the first column to re-cluster
+  #' @param pow Soft power to use for network construction, if NULL best power is estimated using the pickSoftThreshold function from package WGCNA
+  #' @return Membership matrix with only the re-clustering results
+  #' @examples
+  #' ucl_mm <- reclust0(WGCNA_g2v_ch0.10, g2v)
+
+  ucl_bool <- mm[,1]==1
+  ucl_names <- row.names(mm[ucl_bool,])
+  ucl_expr <- expr[,ucl_bool] 
+  
+  if (is.null(pow)) {
+    # Choose a set of soft-thresholding powers
+    powers <- seq(1,10,by=1)
+    # Call the network topology analysis function
+    ucl_sft <- pickSoftThreshold(ucl_expr, powerVector = powers, verbose = 0);
+    pow <- ucl_sft$powerEstimate
+  }
+  
+  ucl_net <- blockwiseModules(ucl_expr, power = pow, 
+                         TOMType = "unsigned", minModuleSize = 10,
+                         reassignThreshold = 0, mergeCutHeight = 0.10,
+                         numericLabels = TRUE, pamRespectsDendro = FALSE,
+                         saveTOMs = TRUE, saveTOMFileBase = "WGCNA_rna_unclust",
+                         verbose = 0, maxBlockSize = 30000)
+  
+  ucl_mm <- toMembMatrix(expr, ucl_net$colors)
+  ucl_mm
+}
+
+
+runReclust <- function(expr, mm, ucl_th, ucl_pow = 4){ 
+  #' Re-cluster genes in module 0 with WGCNA until part of un-clustered genes is inferior to threshold
+  #'
+  #' @param expr Full expression matrix
+  #' @param mm Membership matrix with the first column to re-cluster
+  #' @param ucl_th Threshold indicating the part of un-clustered genes to attain  
+  #' @param ucl_pow Soft power to use to re-cluster un-clustered genes     
+  #' @return New membership matrix with first column as un-clustered genes after re-clustering, initial clusters and new cluster created 
+  #' @examples
+  #' WGCNA_g2v_ch0.10_reclust <- runReclust(g2v, WGCNA_g2v_ch0.10, 0.2)
+  #' WGCNA_rna_ch0.05_reclust <- runReclust(rna, WGCNA_rna_ch0.05, 0.2)
+
+  ucl_prop <- sum(mm[,1])/dim(mm)[1] 
+  print(paste("Part of unclustered genes :", ucl_prop))
+  continue = ucl_prop>ucl_th
+  while (continue) {
+    tryCatch(               
+      # Specifying expression
+      expr = {
+        ucl_mm <- reclust0(mm, expr, pow = ucl_pow)
+        mm <- cbind(ucl_mm[,1] ,mm[,2:dim(mm)[2]], ucl_mm[,2:dim(ucl_mm)[2]])
+        ucl_prop <- sum(mm[,1])/dim(mm)[1] 
+        continue = ucl_prop>ucl_th & ucl_pow>0
+        },
+      # Specifying error message
+      error = function(e){
+        continue = FALSE
+        print(e)
+      },
+      
+      warning = function(w){
+        continue = FALSE
+        print(w)
+      },
+      
+      finally = {            
+        print(paste("Part of unclustered genes :", ucl_prop))
+      }
+    )
+  }
+  colnames(mm) <- 0:(dim(mm)[2]-1)
+  mm
+}
+```
+
+```{r data}
+# The following setting is important, do not omit.
+options(stringsAsFactors = FALSE)
+rna <- (read.csv("../data/DataRnaseq", header = T, sep = " "))
+names(rna) <- str_replace_all(names(rna),'[:punct:]',"")
+rna_expr <- as.data.frame(rna)
+g2v <- t(read.csv("../data/gene2vec_dim_200_iter_9.csv", header = T, row.names = 1))
+g2v_expr <- as.data.frame(g2v)
+```
+
+
+
+```{r Soft Power Picker}
+# Choose a set of soft-thresholding powers
+powers = seq(4,20,by=1);
+# Call the network topology analysis function
+rna_sft = pickSoftThreshold(rna, powerVector = powers, verbose = 5)
+g2v_sft = pickSoftThreshold(g2v, powerVector = powers, verbose = 5)
+```
+```{r Plot softpower rna}
+rna_pow <- plotSft(rna_sft)
+```
+```{r Plot softpower g2v}
+g2v_pow <- plotSft(g2v_sft)
+```
+```{r Network creation}
+rna_net = blockwiseModules(rna_expr, power = rna_pow, 
+                       TOMType = "unsigned", minModuleSize = 10,
+                       reassignThreshold = 0, mergeCutHeight = 0.10,
+                       numericLabels = TRUE, pamRespectsDendro = FALSE,
+                       saveTOMs = TRUE, saveTOMFileBase = "WGCNA_rna_TOM",
+                       verbose = 3, maxBlockSize = 30000)
+g2v_net = blockwiseModules(g2v_expr, power = g2v_pow, 
+                       TOMType = "unsigned", minModuleSize = 10,
+                       reassignThreshold = 0, mergeCutHeight = 0.10,
+                       numericLabels = TRUE, pamRespectsDendro = FALSE,
+                       saveTOMs = TRUE, saveTOMFileBase = "WGCNA_g2v_TOM",
+                       verbose = 3, maxBlockSize = 30000)
+```
+```{r Save network}
+save(rna_net, file = "WGCNA_rna_net.RData")
+save(g2v_net, file = "WGCNA_g2v_net.RData")
+```
+```{r Number of clusters}
+table(rna_net$colors)
+table(g2v_net$colors)
+```
+```{r Labels to membership matrix}
+rna_mm <- toMembMatrix(rna_expr, rna_net$colors)
+g2v_mm <- toMembMatrix(g2v_expr, g2v_net$colors)
+```
+```{r Save Matrices}
+write.csv(rna_mm, file = "WGCNA_rna_ch0.10.csv")
+write.csv(g2v_mm, file = "WGCNA_g2v_ch0.10.csv")
+```
+```{r}
+rna_net05 = blockwiseModules(rna_expr, power = rna_pow, 
+                       TOMType = "unsigned", minModuleSize = 10,
+                       reassignThreshold = 0, mergeCutHeight = 0.05,
+                       numericLabels = TRUE, pamRespectsDendro = FALSE,
+                       saveTOMs = TRUE, saveTOMFileBase = "WGCNA_rna_TOM",
+                       verbose = 0, maxBlockSize = 30000)
+table(rna_net05$colors)
+rna_mm05 <- toMembMatrix(rna_expr, rna_net05$colors)
+write.csv(rna_mm05, file = "WGCNA_rna_ch0.05.csv")
+```
+```{r}
+rna_net05s = blockwiseModules(rna_expr, power = rna_pow, 
+                       TOMType = "signed", minModuleSize = 10,
+                       reassignThreshold = 0, mergeCutHeight = 0.05,
+                       numericLabels = TRUE, pamRespectsDendro = FALSE,
+                       saveTOMs = TRUE, saveTOMFileBase = "WGCNA_rna_signedTOM",
+                       verbose = 0, maxBlockSize = 30000)
+table(rna_net05s$colors)
+rna_mm05s <- toMembMatrix(rna_expr, rna_net05s$colors)
+write.csv(rna_mm05s, file = "WGCNA_rna_ch0.05_signedTOM.csv")
+```
+
+
+```{r Load WGCNA membership matrices}
+WGCNA_rna_ch0.05 <- read.csv("./ModuleMatrix/WGCNA_rna_ch0.05.csv", header = T, row.names = 1)
+WGCNA_g2v_ch0.10 <- read.csv("./ModuleMatrix/WGCNA_g2v_ch0.10.csv", header = T, row.names = 1)
+```
+
+
+```{r}
+mm <- WGCNA_g2v_ch0.10
+expr <- g2v
+ucl_th <- 0.02
+WGCNA_g2v_ch0.10_reclust <- runReclust(expr, mm, ucl_th)
+```
+```{r}
+mm <- WGCNA_rna_ch0.05
+expr <- rna
+ucl_th <- 0.02
+WGCNA_rna_ch0.05_reclust <- runReclust(expr, mm, ucl_th)
+```
+```{r}
+rna_net01 = blockwiseModules(rna_expr, power = rna_pow+4, 
+                       TOMType = "unsigned", minModuleSize = 10,
+                       reassignThreshold = 0, mergeCutHeight = 0.01,
+                       numericLabels = TRUE, pamRespectsDendro = FALSE,
+                       saveTOMs = TRUE, saveTOMFileBase = "WGCNA_rna_TOM",
+                       verbose = 0, maxBlockSize = 30000)
+#table(rna_net01$colors)
+rna_mm01 <- toMembMatrix(rna_expr, rna_net01$colors)
+write.csv(rna_mm01, file = "WGCNA_rna_ch0.01_pow+4.csv")
+```
+
+```{r}
+expr <- rna
+cl_th <- 0.05
+
+rna_genes <- dim(rna)[2]
+cl_prop <- colSums(rna_mm01)/rna_genes
+cl_recl_bool <- cl_prop>cl_th
+torecl <- rna_mm01[,cl_recl_bool]
+rna_mm_torecl <- cbind(rowSums(toreclust),rna_mm01[,!cl_recl_bool])
+
+recl_mm <- reclust0(rna_mm_torecl, expr, pow = 10)
+rna_mm_recl <- cbind(recl_mm[,1] ,rna_mm_torecl[,2:dim(rna_mm_torecl)[2]], recl_mm[,2:dim(recl_mm)[2]])
+```
+
+```{r}
+colSums(rna_mm_recl)
+```
+
+```{r}
+runReclust_ <- function(expr, mm, cl_th, cl_pow = 15){ 
+  #' Re-cluster genes in module 0 with WGCNA until part of un-clustered genes is inferior to threshold
+  #'
+  #' @param expr Full expression matrix
+  #' @param mm Membership matrix with the first column to re-cluster
+  #' @param ucl_th Threshold indicating the part of un-clustered genes to attain  
+  #' @param ucl_pow Soft power to use to re-cluster un-clustered genes     
+  #' @return New membership matrix with first column as un-clustered genes after re-clustering, initial clusters and new cluster created 
+  #' @examples
+  #' WGCNA_g2v_ch0.10_reclust <- runReclust(g2v, WGCNA_g2v_ch0.10, 0.2)
+  #' WGCNA_rna_ch0.05_reclust <- runReclust(rna, WGCNA_rna_ch0.05, 0.2)
+  
+  genes <- dim(expr)[2]
+  cl_prop <- colSums(mm)/genes
+  #ucl_prop <- sum(mm[,1])/dim(mm)[1] 
+#  print(paste("Part of unclustered genes :", cl_prop))
+  
+  cl_recl_bool <- cl_prop>cl_th
+  continue = sum(cl_recl_bool)>0
+  
+  old_prop = 1
+  
+  evol_prop <- c()
+  evol_pow <- c()
+  
+  while (continue) {
+    tryCatch(               
+      # Specifying expression
+      expr = {
+        print(dim(cl_recl_bool))
+        torecl <- mm[,cl_recl_bool]
+        mm_torecl <- cbind(rowSums(torecl),mm[,!cl_recl_bool])
+        
+        cl_prop_sum <- sum(mm_torecl[,1])/genes
+        if (cl_prop_sum-old_prop < 1e-2) {
+          cl_pow <- cl_pow-1
+        }
+        
+        old_prop <- cl_prop_sum
+        evol_prop <- c(evol_prop, old_prop)
+        evol_pow <- c(evol_pow, cl_pow)
+        
+        print(paste("Part of unclustered genes :", old_prop, "-- Power :", cl_pow))
+        continue = continue & cl_pow>0
+        recl_mm <- reclust0(mm_torecl, expr, pow = cl_pow)
+        mm <- cbind(recl_mm[,1] ,mm_torecl[,2:dim(mm_torecl)[2]],
+                         recl_mm[,2:dim(recl_mm)[2]])
+
+        cl_prop <- colSums(mm)/genes
+        cl_recl_bool <- cl_prop>cl_th
+        continue = sum(cl_recl_bool)>0 & cl_pow>0
+        print(continue)
+        },
+      # Specifying error message
+      error = function(e){
+        continue = FALSE
+        print(e)
+      },
+      
+      warning = function(w){
+        continue = FALSE
+        print(w)
+      },
+      
+      finally = {            
+      #  print(paste("Part of unclustered genes :", cl_prop))
+        continue = sum(cl_recl_bool)>0 & cl_pow>0
+        print(paste("Number of clusters :", dim(mm)[2]))
+      }
+    )
+  }
+  colnames(mm) <- 0:(dim(mm)[2]-1)
+  list(mm, evol_prop, evol_pow)
+}
+```
+
+```{r}
+rna_mm01 <- read.csv("WGCNA_rna_ch0.01_pow+4.csv", row.names = 1)
+head(rna_mm01)
+```
+
+```{r}
+rna_mm01_recl <- runReclust_(rna, rna_mm01, 0.05, cl_pow = 15)
+```
+```{r}
+colSums(rna_mm01_recl[[1]])/dim(rna_mm01_recl[[1]])[1]
+```
+```{r}
+rna_mm01_recl2 <- runReclust_(rna, rna_mm01_recl[[1]], 0.10, cl_pow = 15)
+```
+
+```{r}
+rna_mm01_recl2_recl0 <- runReclust(rna, rna_mm01_recl2[[1]], 0.05)
+```
+
+```{r}
+write.csv(rna_mm01_recl2_recl0, file = "~/Documents/Clustering/ModuleMatrix/WGCNA_rna_ch0.01_2rcl_rcl0.csv")
+```
+
+
+```{r}
+g2v_mm <- read.csv("./MembMatrix/WGCNA_g2v_ch0.10.csv", row.names = 1)
+head(g2v_mm)
+#g2v_mm_recl <- runReclust_(g2v, g2v_mm, 0.05, cl_pow = 15)
+g2v_mm_recl0 <- runReclust(g2v, g2v_mm, 0.01, ucl_pow = 3)
+write.csv(g2v_mm_recl0, file = "~/Documents/Clustering/MembMatrix/g2v_mm_recl0.csv")
+```

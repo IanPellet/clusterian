@@ -1,0 +1,915 @@
+---
+title: "SOMbrero"
+output: html_document
+date: '2022-05-31'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)#
+#knitr::opts_knit$set(root.dir = '~/Documents/data/')
+```
+
+## Basic package description
+```{r Libraries, echo=FALSE}
+library(SOMbrero)
+library(cluster)
+library(enrichR)
+library(paletteer)
+```
+
+`trainSOM()` -- standard version of the algorithm on data frame or matrix with numerical columns.
+Input :
+  - `x.data` : data set used to train the SOM, matrix or data frame with col : numerical variables, rows : obs
+  - other arguments : see`help(initSOM)`
+Output :
+  - `somRes` object, see`help(trainSOM)`
+  
+## Dataset loading
+```{r}
+# The following setting is important, do not omit.
+options(stringsAsFactors = FALSE)
+rnaseq <- read.csv("DataRnaseq", header = T, sep = " ")
+
+dim(rnaseq)
+names(rnaseq)[1:10]
+typeof(rnaseq)
+
+X <- as.matrix(t(rnaseq))
+dim(X)
+#head(X)
+```
+
+`X` : RNA-seq data as a matrix with rows representing genes and columns representing samples
+
+## Test basic SOM
+We'll try a basic SOM on a subset of the RNA-seq data.
+```{r}
+mySOM <- trainSOM(x.data = X[1:100,], nb.save = 100, verbose = TRUE,
+                  maxit = 1000)
+```
+
+`nb.save` is necessary to be able to plot the energy.  
+```{r}
+plot(mySOM, what = "energy")
+```
+### Results of the clustering
+
+```{r}
+table(mySOM$clustering)
+plot(mySOM, what="obs", type="hitmap")
+```
+The number of prototypes (clusters) can be changed with parameter `dimension`, default is `dimension = c(5,5)`.
+
+### Assessing the relevance of each variable 
+```{r}
+summary(mySOM)
+```
+Here, all variables have significantly different means among the different clusters and can thus be considered to be relevant for the clustering definition.
+
+### Clustering interpretation
+Mean for each patient
+```{r}
+plot(mySOM, what = "obs", type = "color", variable = 1)
+plot(mySOM, what = "obs", type = "color", variable = 2)
+plot(mySOM, what = "obs", type = "color", variable = 3)
+```
+
+Distance between prototypes :
+```{r}
+plot(mySOM, what = "prototypes", type = "poly.dist", show.names = FALSE)
+```
+### Analyze the projection quality
+```{r}
+quality(mySOM)
+```
+The topographic error value varies between 0 (good projection quality) and 1 (poor projection quality).
+The quantization error is an unbounded positive number. The closer it is to 0, the better the projection quality.
+
+### Building super classes from the resulting SOM
+```{r}
+plot(superClass(mySOM))
+```
+To create `k` super clusters :  
+```{r}
+mySC <- superClass(mySOM, k = 3)
+summary(mySC)
+```
+```{r}
+plot(mySC, plot.var = FALSE)
+plot(mySC, type = "grid")
+plot(mySC, what = "prototypes", type = "color", variable = 10)
+plot(mySC, what = "prototypes", type = "poly.dist")
+```
+
+## Test different parameters
+### Radius type : Gaussian VS Letremy
+
+```{r}
+gaussSOM <- trainSOM(X , dimension = c(10,10), topo = "square",
+                    affectation = "standard", nb.save = 30, verbose = TRUE,
+                    maxit = 1500, radius.type = "gaussian")
+save(gaussSOM, file = 'gaussianSOM.Rdata')
+letSOM <- trainSOM(X , dimension = c(10,10), topo = "square",
+                    affectation = "standard", nb.save = 30, verbose = TRUE,
+                    maxit = 1500, radius.type = "letremy")
+save(letSOM, file = 'letremySOM.Rdata')
+```
+```{r}
+Gauss.nrg <- plot(gaussSOM, what = "energy")
+Let.nrg <- plot(letSOM, what = "energy")
+plot(Let.nrg$data$Steps,Let.nrg$data$Energy, log="y", type="l", col=1)
+lines(Gauss.nrg$data$Steps,Gauss.nrg$data$Energy,col=2)
+legend("bottomleft",legend=c("Letremy","Gaussian"), lty =  c(1,1),col=c(1,2))
+```
+
+```{r}
+#table(testSOM$clustering)
+plot(gaussSOM, what="obs", type="hitmap")
+plot(gaussSOM, what = "prototypes", type = "poly.dist", show.names = TRUE)
+```
+
+```{r}
+#table(testSOM$clustering)
+plot(letSOM, what="obs", type="hitmap")
+plot(letSOM, what = "prototypes", type = "poly.dist", show.names = TRUE)
+```
+
+```{r}
+plot(gaussSOM, what = "prototypes", type = "poly.dist", show.names = FALSE)
+plot(gaussSOM, what = "prototypes", type = "umatrix")
+plot(gaussSOM, what = "prototypes", type = "smooth.dist")
+plot(gaussSOM, what = "prototypes", type = "mds")
+#plot(testSOM, what = "prototypes", type = "grid.dist")
+```
+```{r}
+plot(letSOM, what = "prototypes", type = "poly.dist", show.names = FALSE)
+plot(letSOM, what = "prototypes", type = "umatrix")
+plot(letSOM, what = "prototypes", type = "smooth.dist")
+plot(letSOM, what = "prototypes", type = "mds")
+#plot(testSOM, what = "prototypes", type = "grid.dist")
+```
+
+  - `"poly.dist"` represents the distances between neighboring prototypes with polygons plotted for each cell of the grid. The smaller the distance between a polygon’s vertex and a cell border, the closer the pair of prototypes. The colors indicates the number of observations in the neuron (white is used for empty neurons);
+
+  - `"umatrix"` fills the neurons of the grid using colors that represent the average distance between the current prototype and its neighbors;
+
+  - `"smooth.dist"` plots the mean distance between the current prototype and its neighbors with a color gradation;
+
+  - `mds` plots the number of the neuron on a map according to a Multi Dimensional Scaling (MDS) projection;
+
+  - `grid.dist` plots a point for each pair of prototypes, with x coordinates representing the distance between the prototypes in the input space, and y coordinates representing the distance between the corresponding neurons on the grid.
+
+Letremy SOM seems to give more interesting results compared to Gaussian SOM.
+
+```{r}
+letClust <- letSOM$clustering
+gaussClust <- gaussSOM$clustering
+Letremy.Gauss.ContTable <- prop.table(table(letClust,gaussClust), margin = 2)
+adj.rand.index(letClust,gaussClust)
+```
+
+```{r Letremy vs Gaussian Contingency Table}
+heatmap(Letremy.Gauss.ContTable,Colv = NA, Rowv = NA, xlab = "Gaussian", ylab = "Letremy")
+heatmap(Letremy.Gauss.ContTable, xlab = "Gaussian", ylab = "Letremy")
+```
+
+
+### Topology : square VS hexagonal
+
+```{r}
+hex.SOM <- trainSOM(X , dimension = c(10,10), topo = "hexagonal",
+                    affectation = "standard", nb.save = 30, verbose = TRUE,
+                    maxit = 1500, radius.type = "letremy")
+save(hex.SOM, file = 'hexagonalSOM.Rdata')
+```
+```{r}
+hex.nrg <- plot(hex.SOM, what = "energy")
+plot(Let.nrg$data$Steps,Let.nrg$data$Energy, log="y", type="l", col=1)
+lines(hex.nrg$data$Steps,hex.nrg$data$Energy,col=2)
+legend("topright", legend=c("square","hexagonal"), lty =  c(1,1), col=c(1,2))
+```
+
+```{r}
+#table(testSOM$clustering)
+plot(hex.SOM, what="obs", type="hitmap")
+plot(hex.SOM, what = "prototypes", type = "poly.dist", show.names = TRUE)
+```
+
+```{r}
+#table(testSOM$clustering)
+plot(letSOM, what="obs", type="hitmap")
+plot(letSOM, what = "prototypes", type = "poly.dist", show.names = TRUE)
+```
+
+```{r}
+plot(hex.SOM, what = "prototypes", type = "poly.dist", show.names = FALSE)
+plot(hex.SOM, what = "prototypes", type = "umatrix")
+plot(hex.SOM, what = "prototypes", type = "smooth.dist")
+plot(hex.SOM, what = "prototypes", type = "mds")
+#plot(testSOM, what = "prototypes", type = "grid.dist")
+```
+```{r}
+plot(letSOM, what = "prototypes", type = "poly.dist", show.names = FALSE)
+plot(letSOM, what = "prototypes", type = "umatrix")
+plot(letSOM, what = "prototypes", type = "smooth.dist")
+plot(letSOM, what = "prototypes", type = "mds")
+#plot(testSOM, what = "prototypes", type = "grid.dist")
+```
+
+```{r}
+#letClust <- letSOM$clustering
+hexClust <- hex.SOM$clustering
+Square.Hexa.ContTable <- prop.table(table(letClust,hexClust), margin = 2)
+adj.rand.index(letClust,hexClust)
+```
+```{r Square vs Hexagonal Contingency Table}
+heatmap(Square.Hexa.ContTable,Colv = NA, Rowv = NA, xlab = "Hexagonal", ylab = "Square")
+heatmap(Square.Hexa.ContTable, xlab = "Hexagonal", ylab = "Square")
+```
+
+
+### Affectation : standard VS Heskes
+
+```{r}
+heskes.SOM <- trainSOM(X , dimension = c(10,10), topo = "square",
+                    affectation = "heskes", nb.save = 30, verbose = TRUE,
+                    maxit = 1500, radius.type = "letremy")
+save(heskes.SOM, file = 'heskesSOM.Rdata')
+```
+
+```{r}
+heskes.nrg <- plot(heskes.SOM, what = "energy")
+plot(Let.nrg$data$Steps,Let.nrg$data$Energy, log="y", type="l", col=1)
+lines(heskes.nrg$data$Steps,heskes.nrg$data$Energy,col=2)
+legend("topright", legend=c("standard","heskes"), lty =  c(1,1), col=c(1,2))
+```
+
+```{r}
+#table(testSOM$clustering)
+plot(heskes.SOM, what="obs", type="hitmap")
+plot(heskes.SOM, what = "prototypes", type = "poly.dist", show.names = TRUE)
+```
+
+```{r}
+#table(testSOM$clustering)
+plot(letSOM, what="obs", type="hitmap")
+plot(letSOM, what = "prototypes", type = "poly.dist", show.names = TRUE)
+```
+
+```{r}
+plot(heskes.SOM, what = "prototypes", type = "poly.dist", show.names = FALSE)
+plot(heskes.SOM, what = "prototypes", type = "umatrix")
+plot(heskes.SOM, what = "prototypes", type = "smooth.dist")
+plot(heskes.SOM, what = "prototypes", type = "mds")
+#plot(testSOM, what = "prototypes", type = "grid.dist")
+```
+```{r}
+plot(letSOM, what = "prototypes", type = "poly.dist", show.names = FALSE)
+plot(letSOM, what = "prototypes", type = "umatrix")
+plot(letSOM, what = "prototypes", type = "smooth.dist")
+plot(letSOM, what = "prototypes", type = "mds")
+#plot(testSOM, what = "prototypes", type = "grid.dist")
+```
+
+
+
+
+
+
+
+
+
+
+```{r}
+testSC <- superClass(heskes.SOM, k=20)
+plot(testSC, plot.var = FALSE, show.names = FALSE)
+plot(testSC, type = "grid", show.names = FALSE)
+plot(testSC, what = "prototypes", type = "poly.dist", show.names = FALSE)
+```
+
+
+```{r}
+#letClust <- letSOM$clustering
+heskClust <- heskes.SOM$clustering
+Stand.Heskes.ContTable <- prop.table(table(letClust,heskClust), margin = 2)
+adj.rand.index(letClust,heskClust)
+```
+
+```{r Stand vs Heskes Contingency Table}
+heatmap(Stand.Heskes.ContTable,Colv = NA, Rowv = NA, xlab = "heskes", ylab = "standard")
+heatmap(Stand.Heskes.ContTable, xlab = "heskes", ylab = "standard")
+```
+
+
+## SOMbrero on Gene2vec embedding
+### Gene2vec embedding result loading 
+
+```{r}
+# The following setting is important, do not omit.
+options(stringsAsFactors = FALSE)
+gene2vec <-  as.matrix(read.csv("./gene2vec_dim_200_iter_9.csv", header = T, row.names = 1))
+
+dim(gene2vec)
+colnames(gene2vec) <- 1:dim(gene2vec)[2] 
+gene2vec[1:10,1:10]
+typeof(gene2vec)
+```
+### Basic SOM on Gene2vec
+```{r g2v default and let SOM}
+g2v.default.SOM <- trainSOM(x.data = gene2vec, nb.save = 30, verbose = TRUE, maxit = 1500)
+g2v.let.SOM <- trainSOM(x.data = gene2vec, nb.save = 30, verbose = TRUE, maxit = 1500,
+                        radius.type = "letremy")
+```
+```{r Energy plot default and Letremy SOM}
+g2v.default.nrg <- plot(g2v.default.SOM, what = "energy")
+g2v.let.nrg <- plot(g2v.let.SOM, what = "energy")
+plot(g2v.let.nrg$data$Steps,g2v.let.nrg$data$Energy, log="y", type="l", col=1)
+lines(g2v.default.nrg$data$Steps,g2v.default.nrg$data$Energy,col=2)
+legend("topright", legend=c("Letremy","Default"), lty =  c(1,1), col=c(1,2))
+```
+
+```{r}
+plot(g2v.default.SOM, what="obs", type="hitmap")
+plot(g2v.let.SOM, what="obs", type="hitmap")
+plot(g2v.default.SOM, what = "prototypes", type = "poly.dist", show.names = TRUE)
+plot(g2v.let.SOM, what = "prototypes", type = "poly.dist", show.names = TRUE)
+```
+```{r}
+plot(g2v.default.SOM, what = "prototypes", type = "smooth.dist")
+plot(g2v.let.SOM, what = "prototypes", type = "smooth.dist")
+plot(g2v.default.SOM, what = "prototypes", type = "mds")
+plot(g2v.let.SOM, what = "prototypes", type = "mds")
+plot(g2v.default.SOM, what = "prototypes", type = "grid.dist")
+plot(g2v.let.SOM, what = "prototypes", type = "grid.dist")
+```
+
+Once again, Letremy radius seems more interesting compared with Gaussian radius.
+
+### Load t-SNE representation of Gene2vec data
+```{r load t-SNE for gene2vec}
+g2v.tSNE <- read.csv(file = "gene2vec_TSNE.csv", header = FALSE)
+head(g2v.tSNE)
+```
+
+### Clusters representation on t-SNE projection
+
+```{r plotClustering function}
+plotClustering <- function(proj2D, SOMres) {
+  N <- dim(SOMres$prototypes)[1] 
+  
+  mds <- plot(SOMres, what = "prototypes", type = "mds")$data
+  scalex <- (mds$x - min(mds$x))/(max(mds$x)-min(mds$x))
+  scaley <- (mds$y - min(mds$y))/(max(mds$y)-min(mds$y))
+  colClust <- rgb(scalex,scaley,0.5) 
+
+  colors <- colClust[SOMres$clustering] 
+  #ClustOrder <- superClass(SOMres)$tree$order
+  #colors <- (paletteer_c("pals::jet", n = N))[match(1:N,ClustOrder)]
+  
+  #kovesi.diverging_rainbow_bgymr_45_85_c67 
+  plotCol <- colors[ unclass(SOMres$clustering) ]
+  plot(proj2D, pch = 20, cex = 0.3, col = plotCol)
+}
+```
+
+```{r}
+plotClustering(g2v.tSNE, g2v.default.SOM)
+plotClustering(g2v.tSNE, g2v.let.SOM)
+```
+Similar clusters share similar colors (+/-)
+
+### Test all parameters 
+```{r}
+dimSOM <- c(10,10)
+maxitSOM <- 1000
+nb.saveSOM <- 10
+
+topoSOM <- c("square", "hexagonal")
+radiusSOM <- c("gaussian", "letremy")
+distSOM <- c("letremy", "euclidean", "maximum", "manhattan", "canberra", "minkowski")
+affectSOM <- c("standard", "heskes")
+
+names <- list.files("./SOM/")
+```
+
+```{r}
+for (t in topoSOM) {
+  for (r in radiusSOM) {
+    
+    if (t == "hexagonal") {
+      distSOM <- c("euclidean")
+    } else if (r == "gaussian") {
+      distSOM <- c("euclidean", "maximum", "manhattan", "canberra", "minkowski")
+    } else {
+      distSOM <- c("letremy", "euclidean", "maximum", "manhattan", "canberra", "minkowski")
+    }
+    
+    for (d in distSOM) {
+      for (a in affectSOM) {
+        name <- paste("som_",t,"_",r,"_",d,"_",a,".RData", sep = "")
+        if (!(name %in% names)){
+          som <- try(trainSOM(x.data = gene2vec, dimension = dimSOM, topo = t, 
+                        radius.type = r, dist.type = d, affectation = a,
+                        maxit = maxitSOM, nb.save = nb.saveSOM, verbose = TRUE))
+          if (inherits(som, "try-error")) {
+            next
+          }
+          name2 <- paste("./SOM/",name, sep = "")
+          save(som, file = name)
+          names <- append(names, name)
+        } 
+      }
+    }
+  }
+}
+```
+```{r}
+names <- list.files("./SOM/")
+for (name in names) {
+  f = paste("./SOM/",name,sep = "")
+  load(f)
+  plotProto(som)
+  title(name)
+  plotClustering(g2v.tSNE, som)
+  title(name)
+}
+
+```
+```{r plotProto function}
+plotProto <- function(som){
+  mds <- plot(som, what = "prototypes", type = "mds")$data
+  
+  scalex <- (mds$x - min(mds$x))/(max(mds$x)-min(mds$x))
+  scaley <- (mds$y - min(mds$y))/(max(mds$y)-min(mds$y))
+  
+  colClust <- rgb(scalex,scaley,0.5) 
+  
+  plot(scalex,scaley,pch=20,col=colClust,cex=2*table(som$clustering)/max(table(som$clustering)))  
+} 
+
+```
+
+
+### Clusters functionnal enrichment analysis
+```{r Setup Enrichr}
+setEnrichrSite("Enrichr") # Human genes
+websiteLive <- TRUE
+dbs <- listEnrichrDbs()
+if (is.null(dbs)) websiteLive <- FALSE
+if (websiteLive) head(dbs)
+dbs[grep('GO', dbs$libraryName),c(1,3)] 
+```
+
+```{r enrichment analysis}
+dbs <- c("GO_Molecular_Function_2021", "GO_Cellular_Component_2021", "GO_Biological_Process_2021")
+absPath <- '~/Documents/data/SOM/'
+SOMfiles <- list.files(absPath)[grep('som_', list.files(absPath))] 
+clusters <- 1:dim(som$prototypes)[1]
+namesID <- sub(pattern = ".*som","",SOMfiles)
+enrNames <- paste("enr",namesID,sep="")
+
+for (i in 1:length(SOMfiles)) {
+  f <- paste(absPath,SOMfiles[i],sep = "")
+  load(f)
+  enrClust <- list()
+  for (clust in clusters) {
+     enriched <- enrichr(names(som$clustering[
+       som$clustering == clust]), dbs)
+     clusterName <- paste("cl",clust,sep = "")
+     enrClust[[clusterName]] <- enriched
+  }
+  fenr <- paste(absPath,enrNames[i],sep = "")
+  save(enrClust, file = fenr)
+}
+  
+
+```
+
+```{r print result}
+clNames <- names(enrClust)
+for (cl in clNames) {
+#  plt <- plotEnrich(enrClust[[cl]][[3]], showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value")
+#  print(plt)
+  print(head(enrClust[[cl]][[3]][,c(1,4)]))
+}
+```
+
+
+We will count the number of clusters with at least one adjusted p-value <= 0.05
+```{r count enriched clusters}
+absPath <- '~/Documents/data/SOM/'
+enrfiles <- list.files(absPath)[grep('enr_', list.files(absPath))] 
+
+signSOM <- rep(0,length(enrfiles))
+for (i in 1:length(enrfiles)){
+  #print(i)
+  f <- paste(absPath,enrfiles[i], sep = "")
+  load(f)
+  clNames <- names(enrClust)
+  #print(clNames)
+  for (cl in clNames) {
+    #print(cl)
+    maxpval <- enrClust[[cl]][[3]][1,4]
+    #print(maxpval)
+    if (!is.na(maxpval) && maxpval<=0.05) signSOM[i] <- signSOM[i]+1  
+  }
+} 
+as.data.frame(signSOM, row.names = enrfiles)
+```
+
+There is a clear gap between SOM using standard affectation and Heskes affectation. Letremy seems a bit better but a lot of the parameter combination didn't work so it is hard to compare...
+
+
+```{r}
+
+load('~/Documents/data/SOM/som_square_gaussian_euclidean_standard.RData')
+g2v.dist <- dist(gene2vec, method = "euclidean")
+save(g2v.dist, file = '~/Documents/data/g2v_eucDist.RData')
+g2v.dist.mat <- as.matrix(g2v.dist)
+sil <- silhouette(som$clustering, g2v.dist.mat)
+summary(sil)
+
+sil2 <- sil[order(sil[,1], sil[,3]),]
+tab2 <- table(sil2[,1])
+N = length(tab2)
+colors <- sample(paletteer_c("pals::jet", n = N),N)
+col2 <- rep(colors, tab2)
+barplot(sil2[,3], col = col2[], space = 0, border=NA)
+```
+A lot of silhouette coeff are below 0 -> :(
+
+```{r}
+dendsom <- superClass(som)
+summary(dendsom$tree)
+head(dendsom$tree$height)
+cut25  <- 0.01*max(dendsom$tree$height)
+cutbool <- dendsom$tree$height > cut25
+k <- sum(cutbool)+1
+
+my.sc <- superClass(som, k = k)
+summary(my.sc)
+plot(my.sc, plot.var = FALSE)
+recluster <- my.sc$cluster[som$clustering] 
+names(recluster) <- names(som$clustering)
+
+#g2v.dist.mat
+```
+
+```{r}
+plotSil <- function(clust, distc){
+  sil <- silhouette(clust, distc)
+
+  sil2 <- sil[order(sil[,1], sil[,3]),]
+  tab2 <- table(sil2[,1])
+  N = length(tab2)
+  colors <- sample(paletteer_c("pals::jet", n = N),N)
+  col2 <- rep(colors, tab2)
+  barplot(sil2[,3], col = col2[], space = 0, border=NA)
+} 
+
+```
+
+```{r}
+plotSil(som$clustering, g2v.dist.mat)
+plotSil(recluster, g2v.dist.mat)
+```
+...not that better...
+
+```{r}
+absPath <- '~/Documents/data/SOM/'
+somfiles <- list.files(absPath)[grep('som_', list.files(absPath))]
+somfiles <- somfiles[-grep('heskes',somfiles)] 
+
+for (name in somfiles) {
+  f = paste(absPath,name,sep = "")
+  load(f)
+  plotSil(som$clustering, g2v.dist.mat)
+  title(name)
+}
+
+```
+```{r}
+distonce = c("minkowski")
+for (d in distonce) {
+  g2v.dist <- dist(gene2vec, method = d)
+  g2v.dist.mat <- as.matrix(g2v.dist)
+  save(g2v.dist.mat, file = paste('~/Documents/data/g2v_',d,'Dist.RData', 
+                                  sep = ""))
+}
+```
+
+```{r}
+absPath <- '~/Documents/data/SOM/'
+somfiles <- list.files(absPath)[grep('som_', list.files(absPath))]
+somfiles <- somfiles[-grep('heskes',somfiles)] 
+
+for (name in somfiles) {
+  f <- paste(absPath,name,sep = "")
+  load(f)
+  d <- strsplit(name, "_")[[1]][4] 
+  if (d=="letremy") d <- "euclidean"
+  load(paste('~/Documents/data/g2v_',d,'Dist.RData', 
+                                  sep = ""))
+  plotSil(som$clustering, g2v.dist.mat)
+  title(name)
+}
+```
+Letremy seems better
+
+### Hexagonal topology SOM
+
+```{r Hexagonal topology SOM}
+g2v.hex.SOM <- trainSOM(x.data = gene2vec, nb.save = 30, verbose = TRUE, maxit = 1500,
+                        radius.type = "gaussian", topo = "hexagonal")
+g2v.hexlet.SOM <- trainSOM(x.data = gene2vec, nb.save = 30, verbose = TRUE, maxit = 1500,
+                        radius.type = "letremy", topo = "hexagonal")
+name <- paste(absPath,"som_hexagonal_letremy_euclidean_standard.RData", sep = "")
+som <- g2v.hexlet.SOM
+save(som, file = name)
+```
+
+```{r Plot hex clustering}
+plotProto(g2v.hex.SOM)
+title("hexagonal gaussian")
+plotClustering(g2v.tSNE, g2v.hex.SOM)
+title("hexagonal gaussian")
+
+plotProto(g2v.hexlet.SOM)
+title("hexagonal letremy")
+plotClustering(g2v.tSNE, g2v.hexlet.SOM)
+title("hexagonal metremy")
+
+```
+```{r Hexagonal topo enrichment analysis}
+dbs <- c("GO_Molecular_Function_2021", "GO_Cellular_Component_2021", "GO_Biological_Process_2021")
+
+somhex <- list(g2v.hex.SOM, g2v.hexlet.SOM)
+nameshex <- c("som_hexagonal_gaussian_euclidean_standard.RData","som_hexagonal_letremy_euclidean_standard.RData")
+namesID <- sub(pattern = ".*som","",nameshex)
+enrNames <- paste("enr",namesID,sep="")
+for (i in 1:length(somhex)) {
+  som <- somhex[[i]] 
+  clusters <- 1:dim(som$prototypes)[1]
+  enrClust <- list()
+  for (clust in clusters) {
+     enriched <- enrichr(names(som$clustering[
+       som$clustering == clust]), dbs)
+     clusterName <- paste("cl",clust,sep = "")
+     enrClust[[clusterName]] <- enriched
+  }
+  fenr <- paste(absPath,enrNames[i],sep = "")
+  save(enrClust, file = fenr)
+}
+  
+```
+
+```{r}
+plotSil(g2v.hex.SOM, g2v.dist.mat)
+plotSil(g2v.hexlet.SOM, g2v.dist.mat)
+```
+Hexagonal topology with Letremy radius seems to be the better result we have seen so far !
+
+```{r}
+plot(superClass(g2v.hexlet.SOM))
+```
+
+
+
+```{r}
+som <- trainSOM(x.data = gene2vec, nb.save = 30, verbose = TRUE, maxit = 1500,
+                        radius.type = "letremy", topo = "hexagonal",dimension = c(7, 7))
+```
+
+```{r}
+plot(som, what="obs", type="hitmap")
+plot(som, what = "prototypes", type = "poly.dist", show.names = TRUE)
+plot(som, what = "prototypes", type = "smooth.dist")
+plot(som, what = "prototypes", type = "mds")
+plot(som, what = "prototypes", type = "grid.dist")
+```
+
+```{r}
+quality(som)
+```
+The topographic error value varies between 0 (good projection quality) and 1 (poor projection quality). Here, the topographic quality of the mapping is equal to 0.50, which means that around 50% of the observations have a second best unit in the neighborhood of the best matching unit.
+
+The quantization error is an unbounded positive number. The closer it is to 0, the better the projection quality.
+
+
+```{r}
+ndim <- 2:30
+topo <- c()
+quan <- c()
+for (n in ndim) {
+  som <- trainSOM(x.data = gene2vec, verbose = FALSE, maxit = 1000, 
+                  radius.type = "letremy", topo = "hexagonal", 
+                  dimension = c(n, n), dist.type = "euclidean")
+  q <- quality(som)
+  topo <- append(topo, q$topographic)
+  quan <- append(quan, q$quantization)
+}
+
+plot(ndim,quan)
+plot(ndim,topo)
+
+save(ndim, quan, topo, file = paste(absPath, "qualityVSndim.RData"))
+```
+
+```{r}
+ndim <- 5:25
+nrep <- 10
+topoMean <- c()
+quanMean <- c()
+topoMed <- c()
+quanMed <- c()
+for (n in ndim) {
+  to <- c()
+  qu <- c()
+  for(i in 1:nrep){
+    som <- trainSOM(x.data = gene2vec, verbose = FALSE, maxit = 1000, 
+                    radius.type = "letremy", topo = "hexagonal", 
+                    dimension = c(n, n), dist.type = "euclidean")
+    q <- quality(som)
+    to <- append(to, q$topographic)
+    qu <- append(qu, q$quantization)
+  }
+  topoMean <- append(topoMean, mean(to))
+  quanMean <- append(quanMean, mean(qu))
+  topoMed <- append(topoMed, median(to))
+  quanMed <- append(quanMed, median(qu))
+}
+
+#plot(ndim,quan)
+#plot(ndim,topo)
+
+save(ndim, topoMean, quanMean, topoMed, quanMed, file = paste(absPath, "qualityMeanMedVSndim.RData"))
+```
+
+## Create membership matrix
+
+```{r data sets loading}
+options(stringsAsFactors = FALSE)
+#rna <- t(read.csv("../data/DataRnaseq", header = T, sep = " "))
+rna <- read.csv("../data/DataRnaseq_Transposed.csv", header = T, row.names=1)
+g2v <- read.csv("../data/gene2vec_dim_200_iter_9.csv", header = T, row.names=1)
+```
+
+
+```{r SOM}
+n <- 15
+SOM_rna <- trainSOM(x.data = rna, dimension = c(n,n), topo = "hexagonal", radius.type = "letremy", dist.type = "euclidean", affectation = "standard", maxit = 1000)
+SOM_g2v <- trainSOM(x.data = g2v, dimension = c(n,n), topo = "hexagonal", radius.type = "gaussian", dist.type = "euclidean", affectation = "standard")
+```
+
+```{r tSNE loading}
+g2v_tSNE <- read.csv(file = "../data/gene2vec_TSNE.csv", header = FALSE)
+rna_tSNE <- read.csv(file = "../data/RNAseq_tSNE.csv", header = TRUE, row.names = 1)
+```
+
+
+```{r plot RNA}
+plotProto(SOM_rna)
+title("RNA-seq SOM prototypes")
+plotClustering(rna_tSNE, SOM_rna)
+title("RNA-seq SOM clustering")
+```
+```{r plot Gene2vec}
+plotProto(SOM_g2v)
+title("Gene2vec SOM prototypes")
+plotClustering(g2v_tSNE, SOM_g2v)
+title("Gene2vec SOM clustering")
+```
+```{r}
+createMM <- function(SOM_, filename = FALSE){
+  genes <- names(SOM_$clustering)
+  cl <- sort(unique(SOM_$clustering))
+  nclust <- length(cl)
+  mm <- data.frame(matrix(0, nrow = length(genes), ncol = nclust), row.names = genes)
+  colnames(mm) <- cl
+  #print(mm)
+  for (i in 1:length(genes)) {
+    #print(genes[i])
+    #print(SOM_$clustering[genes[i]])
+    mm[genes[i],as.character(SOM_$clustering[genes[i]])] <- 1 
+  }
+  if (filename != FALSE) {
+    write.csv(mm, file = paste(filename, "csv", sep = "."), row.names = TRUE)
+  }
+  mm
+}
+```
+```{r}
+rna_mm <- createMM(SOM_rna, filename = "./ModuleMatrix/SOM_rna_HexLet")
+g2v_mm <- createMM(SOM_g2v, filename = "./ModuleMatrix/SOM_g2v_HexGauss")
+```
+```{r}
+dim(rna_mm)
+dim(g2v_mm)
+```
+
+
+
+
+
+
+
+# Create membership matrices
+```{r}
+setwd('~/Documents/Clustering/')
+source('./clusterian_R/lab2mat.R')
+
+# The following setting is important, do not omit.
+options(stringsAsFactors = FALSE)
+g2v <-  as.matrix(read.csv("../data/gene2vec_dim_200_iter_9.csv", header = T, row.names = 1))
+head(row.names(g2v))
+```
+
+```{r}
+load('./SOM/som_hexagonal_gaussian_euclidean_standard.RData')
+mm <- lab2mat(som$clustering, genes = row.names(g2v))
+head(mm)
+colSums(mm)
+```
+
+
+# Re-test all parameters
+
+All parameters are re-tested with a $15\times 15$ grid.
+
+```{r}
+library(SOMbrero)
+```
+
+```{r}
+options(stringsAsFactors = FALSE)
+rna <- read.csv("../data/DataRnaseq_Transposed.csv", header = T, row.names = 1)
+```
+
+```{r}
+dimSOM <- c(15,15)
+maxitSOM <- 1000
+nb.saveSOM <- 5
+
+topoSOM <- c("square", "hexagonal")
+radiusSOM <- c("gaussian", "letremy")
+distSOM <- c("letremy", "euclidean", "maximum", "manhattan", "canberra", "minkowski")
+# affectSOM <- c("standard", "heskes")
+affectSOM <- c("standard")
+
+
+```
+
+```{r}
+names <- list.files("./SOM/")
+for (t in topoSOM) {
+  for (r in radiusSOM) {
+    
+    if (t == "hexagonal") {
+      distSOM <- c("euclidean")
+    } else if (r == "gaussian") {
+      distSOM <- c("euclidean", "maximum", "manhattan", "canberra", "minkowski")
+    } else {
+      distSOM <- c("letremy", "euclidean", "maximum", "manhattan", "canberra", "minkowski")
+    }
+    
+    for (d in distSOM) {
+      for (a in affectSOM) {
+        name <- paste("SOM_rna_",t,"_",r,"_",d,"_",a,".RData", sep = "")
+        if (!(name %in% names)){
+          som <- try(trainSOM(x.data = rna, dimension = dimSOM, topo = t, 
+                        radius.type = r, dist.type = d, affectation = a,
+                        maxit = maxitSOM, nb.save = nb.saveSOM, verbose = TRUE))
+          if (inherits(som, "try-error")) {
+            next
+          }
+          name2 <- paste("./SOM/",name, sep = "")
+          save(som, file = name2)
+          names <- append(names, name)
+        } 
+      }
+    }
+  }
+}
+```
+
+```{r}
+source('~/Documents/Clustering/clusterian_R/lab2mat.R')
+directory <- "./SOM/"
+names <- list.files(directory)
+mm_dir <- paste(directory,'MembMatrix/', sep='')
+mm_names <- list.files(mm_dir)
+for (file in names) {
+  file_split <- strsplit(file, "\\.")[[1]]
+  name <- file_split[-length(file_split)]
+  ext <- file_split[length(file_split)]
+  mm_file <- paste(name,'.csv',sep="")
+  #print(ext)
+  if (ext=='RData' && !(mm_file %in% mm_dir)) {
+    path_ <- paste(directory,file, sep = "")
+    load(path_)
+    mm <- lab2mat(som$clustering, genes = names(som$clustering))
+    write.csv(mm,paste(mm_dir, mm_file, sep = ""), row.names = TRUE)
+  }
+}
+```
+
