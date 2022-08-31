@@ -8,17 +8,21 @@ import matplotlib.pyplot as plt
 import matplotlib.pylab as pl
 import pickle
 
-def runEnrichr(modules, desc, gene_sets='GO_Biological_Process_2021', out_dir='~/Documents/Clustering/ModuleMatrix/Enrich/'):
+def runEnrichr(modules, desc, gene_sets='GO_Biological_Process_2021', 
+               out_dir='~/Documents/Clustering/ModuleMatrix/Enrich/'):
     """Run enrichment analysis on all clusters, returns output directory.
     
-    A new directory named as `desc` is created in the output durectory to contain the analysis of all the clusters.
+    A new directory named as `desc` is created in the output durectory to contain 
+    the analysis of all the clusters.
     
     Arguments:
     modules -- membership matrix with genes as index
     desc -- prefix to use to name created directories
     Keyword arguments:
-    gene_sets -- gene library to use for analysis (default 'GO_Biological_Process_2021')
-    out_dir -- output directory (default '~/Documents/Clustering/ModuleMatrix/Enrich/')
+    gene_sets -- gene library to use for analysis 
+    (default 'GO_Biological_Process_2021')
+    out_dir -- output directory 
+    (default '~/Documents/Clustering/ModuleMatrix/Enrich/')
     Return value:
     od -- output directory
     """
@@ -134,8 +138,10 @@ def runEnrichr_directory(mm_path = './MembMatrix', mm_enrich_dir = 'Enrich'):
     """Run enrichment analysis for all membership matrices.
     
     Keyword arguments:
-    mm_path -- Path of the directory containing the membership matrices (default './ModuleMatrix')
-    mm_enrich_dir -- Name of the directory where to output results (default 'mm_enrich_dir')
+    mm_path -- Path of the directory containing the membership matrices 
+    (default './ModuleMatrix')
+    mm_enrich_dir -- Name of the directory where to output results 
+    (default 'mm_enrich_dir')
     """
     # Check all the mm files
     mm_file_names = []
@@ -217,7 +223,8 @@ def getAll_enr_def(enr_path = './MembMatrix/Enrich/'):
     all_def = pd.concat(all_def_list)
     return all_def
 
-def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300, pval=None):
+def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300,
+                     pval=None):
     """Get cluster evaluation according to enrichment results in `enr_path`.
 
     Parameters
@@ -258,7 +265,8 @@ def evalEnriched_all(datasets, enr_path='./MembMatrix/Enrich', score_th = 300, p
     ri = []
     for i in all_enr.index:
         data = datasets[all_enr.at[i,'Dataset']]
-        _, _, rCi, rGi = getEnriched(all_enr.at[i,'File'],score_th,genes=data.index, pval=pval)
+        _, _, rCi, rGi = getEnriched(all_enr.at[i,'File'], score_th,
+                                     genes=data.index, pval=pval)
         
 #        if False:
 #            try :
@@ -424,7 +432,8 @@ def getEnrich_cl(enr_dir, cl, score_th=300, pval=None, mm=None, ovlp_th=None):
     return enr_cl, enr_genes, cl_genes
 
 
-def getBest_cluster_list_all(enr_dir='./MembMatrix/Enrich/', pval=None, cover=False):
+def getBest_cluster_list_all(enr_dir='./MembMatrix/Enrich/', pval=None,
+                             cover=False):
     """Get the list of most enriched clusters for all clustering solutions.
     
     Parameters
@@ -512,10 +521,11 @@ def getBest_cl_enr(keys, bestCl_dict, n_cl=1, enr_dir='./MembMatrix/Enrich/',
                     break
                 cl = bestCl_dict[key][i]
                 if type(score_th)==type(None) and type(pval)==type(None):
-                    enr_cli, _ = getEnrich_cl(dir_.values[0], cl, score_th, pval=pval)
+                    enr_cli, _ = getEnrich_cl(dir_.values[0], cl, score_th,
+                                              pval=pval)
                 else:
                     enr_cli, enr_genes, cl_genes = getEnrich_cl(dir_.values[0], cl,
-                                                                score_th, pval=pval)
+                                                                score_th,pval=pval)
                     cover_.append(len(enr_genes)/len(cl_genes))
                     if len(enr_genes[0])==0:
                         enr_genes = []
@@ -578,319 +588,35 @@ def getBest_cluster_cover(enr_dir, pval=0.05):
     #print(bestCl_list)
     return bestCl_list
 
-
-def CLEAN(sol, mm_dir='./MembMatrix/', enr_dir='Enrich', pval=0.1,
-          clustCLEAN=False):
-    """Get gene-wise CLEAN score for clustering solution in sol.
-    
-    Parameters :
-    ----------
-    sol : string
-        Prefixe of the clustering solution in `mm_dir` for which to compute CLEAN 
-        score.
-        
-    mm_dir : string, default = './MembMatrix/'
-        Path to the directory in which to find the membership matrics for the 
-        solution to evaluate. The membership matrix files must be named as 
-        `prefix.csv`, with prefix corresponding to `sol`.
-        
-    enr_dir : string, default = 'Enrich'
-        Name of the subdirectory of `mm_dir` in which to find enrichment analysis 
-        results of solution `sol`. 
-        
-    pval : float, default = 0.1
-        Cutoff p-value above which the enrichment in one term is not considered as
-        statisticaly significant.
-        
-    clustCLEAN : bool, default = False
-        If `True`, the CLEAN score of clusters is also computed.
-        
-    
-    Returns : 
-    -------
-    CLEAN : float array, len = n_genes
-        List of gene-wise CLEAN score given in the same order as the genes in the
-        membership matrix.
-        
-    cCLEAN : pandas DataFrame, shape = (n_genes, n_clusters)
-        Dataframe of CLEAN score given for each gene in each cluster. Only returned 
-        if `clustCLEAN = True`.
-    """
-    mm_file = os.path.join(mm_dir,sol+'.csv')
-    enr_path = os.path.join(mm_dir,enr_dir,sol)
-    mm = misc.load_mm(mm_file)
-    mm.columns = [i for i in range(mm.shape[1])]
-    all_genes = mm.index
-    
-    enr = getEnriched(enr_path, score_th=None, genes=all_genes, pval=pval)[0]
-    
-    if type(enr)==type(None):
-        raise Exception(f'No enrichment analysis results found for {sol}.')
-    
-    func_cat = np.unique(enr.loc[:,'Term'])
-    clusters = mm.columns
-    p = pd.DataFrame(1, columns=func_cat, index=[int(c) for c in clusters])
-    gene_cat = pd.DataFrame(0, columns=func_cat, index=all_genes)
-    
-    for i in range(enr.shape[0]):
-        line = enr.iloc[i,:]
-        cl = line['Cluster']
-        term = line['Term']
-        genes = line['Genes'].split(';')
-        q = line['Adjusted P-value']
-        p.at[cl,term]=q
-        for g in genes:
-            gene_cat.at[g,term]=1
-            
-    CLEAN = []
-    for g in all_genes:
-        inCl = mm.columns[mm.loc[g,:]==1]
-        inCat = gene_cat.columns[gene_cat.loc[g,:]==1]
-        pij = []
-        for i in inCl:
-            for j in inCat:
-                pij.append(p.loc[i,j])
-        if len(pij)==0:
-            CLEAN.append(0)
-        else:
-            CLEAN.append(np.max(-np.log10(pij)))
-            
-    if not clustCLEAN:
-        return CLEAN
-    
-    cCLEAN = mm.replace(0,None).multiply(CLEAN, axis=0)
-
-    return CLEAN, cCLEAN
-
-def multiCLEAN(sol_, mm_dir='./MembMatrix/', enr_dir='Enrich', pval=0.1,
-               clustCLEAN=False, genes=None):
-    """Get CLEAN score for all clustering solutions in sol.
-    
-    Parameters :
-    ----------
-    sol : string array, len = n_sol
-        List of prefixes of the clustering solutions in `mm_dir` for which to
-        compute CLEAN score.
-        
-    mm_dir : string, default = './MembMatrix/'
-        Path to the directory in which to find the membership matrices for the 
-        solutions to evaluate. The membership matrix files must be named as 
-        `prefix.csv`, with prefix corresponding to what's given in list `sol`.
-        
-    enr_dir : string, default = 'Enrich'
-        Name of the subdirectory of `mm_dir` in which to find enrichment analysis 
-        results of solutions in `sol`. 
-        
-    pval : float, default = 0.1
-        Cutoff p-value above which the enrichment in one term is not considered as
-        statisticaly significant.
-        
-    clustCLEAN : bool, default = False
-        If `True`, the CLEAN score of clusters is also computed.
-        
-    
-    Returns : 
-    -------
-    CLEAN_df : pandas DataFrame, shape = (n_sol, n_genes)
-        List of gene-wise CLEAN scores given in the same order as the genes in the
-        membership matrix.
-        
-    cCLEAN : pandas DataFrame list, shape = (n_sol, n_genes, n_clusters)
-        List of dataframes containing cluster-wise CLEAN scores for each solution.
-        Only returned if `clustCLEAN = True`.
-    """
-    CLEAN_ = []
-    cCLEAN_ = []
-    for sol in sol_:
-        if clustCLEAN:
-            clean, cclean  = CLEAN(sol, mm_dir=mm_dir, enr_dir=enr_dir, pval=pval,
-                                   clustCLEAN=clustCLEAN)
-            
-            cCLEAN_.append(cclean)
-        else:
-            clean  = CLEAN(sol, mm_dir=mm_dir, enr_dir=enr_dir, pval=pval,
-                           clustCLEAN=clustCLEAN)
-        CLEAN_.append(clean)
-        
-    if type(genes)!=type(None):
-        CLEAN_df = pd.DataFrame(CLEAN_, index=sol_, 
-                                columns=pd.Series(genes, name='Genes'))
-    else:
-        CLEAN_df = pd.DataFrame(CLEAN_, index=sol_)
-    
-    if not clustCLEAN:
-        return CLEAN_df
-    
-    
-    return CLEAN_df, cCLEAN_
-        
-    
-def plot_multiCLEAN(CLEAN_df, n_pts=100, yscale='log', alpha=0.9):
-    """Plot the number of genes with CLEAN score above x for each solution.
-    
-    
-    Parameters :
-    ----------
-    CLEAN_df : pandas DataFrame, shape = (n_sol, n_genes)
-        List of gene-wise CLEAN scores.
-        
-    n_pts : int, default = 100
-        Number of points x on which to plot.
-        
-    yscale : {"linear", "log", "symlog", "logit", ...}, default = 'log'
-        The axis scale type to apply to axis y.
-        
-    alpha : float in [0,1], default = 0.9
-        Alpha parameter for the plot function. 
-    """
-    n = CLEAN_df.shape[0]
-    colors = pl.cm.jet(np.linspace(0,1,n))
-
-
-    Mclean = CLEAN_df.to_numpy().max()
-    #print(Mclean)
-    x = np.linspace(1,Mclean,n_pts)
-    y = []
-    for i in range(n):
-        clean = np.array(CLEAN_df.iloc[i,:])
-        y.append([sum(clean>=i) for i in x])
-        
-    for i in range(n):
-        plt.plot(x,y[i], alpha=alpha, color=colors[i])
-    plt.legend([i for i in CLEAN_df.index])
-    plt.yscale(yscale)
-    plt.xlabel('CLEAN score')
-    plt.ylabel('# genes with score >= x')
-    plt.show()
-    
-
-def plot_clustCLEAN(cCLEAN_df, n_pts=100, yscale='log', alpha=0.5, leg=False):
-    """Plot the number of genes with CLEAN score above x for each cluster.
-    
-    Parameters :
-    ----------
-    cCLEAN_df : pandas DataFrame list, shape = (n_sol, n_genes, n_clusters)
-        List of dataframes containing cluster-wise CLEAN scores for each solution.
-        
-    n_pts : int, default = 100
-        Number of points x on which to plot.
-        
-    yscale : {"linear", "log", "symlog", "logit", ...}, default = 'log'
-        The axis scale type to apply to axis y.
-        
-    alpha : float in [0,1], default = 0.9
-        Alpha parameter for the plot function. 
-        
-    lef : bool, default = False
-        Whether or not to display legend.
-        
-    Returns :
-    -------
-    x : float array, len = n_pts
-        Plot points for CLEAN score (x axis).
-        
-    ydf : pandas DataFrame, shape = (n_clusters, n_pts)
-        Number of genes with CLEAN score greater or equal to x for all clusters.
-    """
-    n = cCLEAN_df.shape[1]
-    colors = pl.cm.jet(np.linspace(0,1,n))
-    
-    Mclean = cCLEAN_df.fillna(0).to_numpy().max()
-    x = np.linspace(1,Mclean,n_pts)
-    y = []
-    for i in range(n):
-        cclean = cCLEAN_df.iloc[:,i]
-        n_genes = sum(abs(np.isnan(cclean.to_list())-1))
-        clean = np.array(cclean)
-        y.append([sum(clean>i)/n_genes for i in x])
-
-    ydf = pd.DataFrame(y, index=cCLEAN_df.columns)
-    ydf = ydf.replace(0,None)
-    for i in range(n):
-        plt.plot(x,ydf.iloc[i,:], alpha=alpha, color=colors[i])
-    if leg:
-        plt.legend([i for i in cCLEAN_df.columns])
-    plt.yscale(yscale)
-    plt.xlabel('CLEAN score')
-    plt.ylabel('# genes with score >= x')
-    plt.show()
-    
-    return x,ydf
-
-def getBest_cCLEAN(ydf, q=0.95, cutLow=0.40, cutHigh=0.75, plot=True, plot_all=True,
-                   alpha=1):
-    """Get the best clusters according to cCLEAN.
-    
-    Parameters :
-    ----------
-    ydf : pandas DataFrame, shape = (n_clusters, n_pts)
-        Number of genes with CLEAN score greater or equal to x for all clusters.
-        
-    q : float, 0<q<1, default = 0.95
-        Quantile above which to keep cluster.
-        
-    cutLow : float, default = 0.40
-        Part of CLEAN score threshold values above which to keep.
-        
-    cutHigh : float, default = 0.75
-        Part of CLEAN score threshold values under which to keep.
-        
-    plot : bool, default = True
-        Whether or not to plot the best clusters.
-        
-    plot_all : bool, default = True
-        Whether or not to plot all the clusters (in black).
-        
-    alpha : float in [0,1], default = 0.9
-        Alpha parameter for the plot function.
-        
-    Returns :
-    -------
-    Y_best_ : pandas DataFrame, shape = (n_best, n_pts)
-        Number of genes with CLEAN score greater or equal to x for best clusters.
-    """
-    Yquantile =  np.quantile(ydf.fillna(0), q, axis=0)
-    Ydist = ydf-Yquantile
-    
-    iLow = int(Ydist.shape[1]*cutLow)
-    iHigh = int(Ydist.shape[1]*cutHigh)
-    Ysum = np.sum(Ydist.iloc[:,iLow:iHigh]>0, axis=1)
-    
-    best_i_ = np.where(Ysum==max(Ysum))[0]
-    Y_best_ = ydf.iloc[best_i_,:]
-    
-    n = len(best_i_)
-    colors = pl.cm.jet(np.linspace(0,1,n))
-    j = 0
-    if plot:
-        for i in range(ydf.shape[0]):
-            if i in best_i_:
-                plt.plot((ydf.iloc[i,:]), color=colors[j], label=ydf.index[i],
-                         alpha=alpha)
-                j+=1
-            elif plot_all:
-                plt.plot(ydf.iloc[i,:], 'k', alpha=0.2)
-        plt.yscale('log')
-        plt.legend()
-        
-    return Y_best_
-
 def getEnrich_cover(enr_dir, mm, pval=None, score=None, ovlp_th=None):
-
-    #print('Loading membership matrix...')
-    #mm = misc.load_mm(mm_file)
-    #print('Membership matrix loaded.')
-    #print('Dataframe initialisation..')
+    """Get the coverage metric for each cluster
+    
+    Parameters:
+    ----------
+    enr_dir : string
+        Path to the directory containing the enrichment analysis results for all
+        the clusters of one solution.
+    mm : pandas DataFrame, shape=(n_genes, n_clusters)
+        Membership matrix of the solution.
+    pval : float, default=None
+        Adjusted p-value threshold for enrichment.
+    score : float, default=None
+        Combined score threshold for enrichment.
+    ovlp_th : float, default=None
+        Overlap threshold for enrichment.
+        
+    At least one of pval, score, ovlp_th should be given.
+    
+    Returns:
+    -------
+    cover_df : pandas DataFrame, shape(n_clusters, 2)
+        Coverage value and number of genes per cluster.
+    """
     cover_df = pd.DataFrame(0, index=mm.columns, columns=['Cover', '# genes'])
-    #print('Dataframe initialized.')
     for i,c in enumerate(cover_df.index):
-        #print(c)
-        #print('getEnrich...')
-        #print(enr_dir,c)
-        enr_cl, enr_genes, cl_genes = getEnrich_cl(enr_dir, c, pval=pval, score_th=score,
-                                                mm=mm, ovlp_th=ovlp_th)
-        #print(enr_genes)
-        #print('Done.')
+        enr_cl, enr_genes, cl_genes = getEnrich_cl(enr_dir, c, pval=pval,
+                                                   score_th=score, mm=mm,
+                                                   ovlp_th=ovlp_th)
         if type(enr_genes)==type(None):
             cover_df.loc[c,'Cover'] = None
         else:
@@ -928,10 +654,23 @@ def cleanEnrDir(enr_dir):
                     print('rmdir', root)
     return None
 
-
-
-
 def getGO(enr, string=False):
+    """Get list of GO codes from enrichment analysis results
+    
+    Parameters:
+    ----------
+    enr : pandas DataFrame
+        Enrichment analysis results dataframe
+    string : bool, default=False
+        If true GO codes are returned as a string separated by comma.
+        
+    Returns:
+    -------
+    GO : List of strings or string
+        Depends on parameter `string`, if False, a list of GO as string is returned
+        if True one string containing all GO is returned.
+    """
+    
     GO = []
     for t in enr.loc[:,'Term']:
         GO.append(t.split(' ')[-1][1:-1])
@@ -940,6 +679,18 @@ def getGO(enr, string=False):
     return ','.join(GO)
 
 def getOntology(enr):
+    """Returns url to visualise GO hierarchy of enriched terms
+    
+    Parameters:
+    ----------
+    enr : pandas DataFrame
+        Enrichment analysis results dataframe
+    
+    Returns:
+    -------
+    requestURL : string
+        URL to acces QuickGO graph visualisation of terms
+    """
     go = getGO(enr, string=True)
     urlBase = "https://www.ebi.ac.uk/QuickGO/services/ontology/go/terms/{ids}/chart?ids="
 
@@ -948,6 +699,17 @@ def getOntology(enr):
     return requestURL
 
 def saveOntology(requestURL, fname, imgDir):
+    """Save QuickGO graph visualisation image
+    
+    Parameters:
+    ----------
+    requestURL : string
+        URL to acces QuickGO graph visualisation of terms
+    fname : string
+        File name to save image to
+    imgDir : string
+        Path to the directory where to save the file
+    """
     r = requests.get(requestURL, headers={ "Accept" : "image/png"})
 
     if not r.ok:
