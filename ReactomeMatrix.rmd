@@ -1,0 +1,162 @@
+---
+title: "ReactomeMatrix"
+output: html_document
+date: '2022-05-10'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '~/Documents/')
+```
+
+```{r}
+library(ReactomeContentService4R)
+# Fetch all Human Pathways
+pathways <- getSchemaClass(class = "Pathway", species = "human", all = TRUE)
+pathwayIDs <- as.matrix(pathways$dbId)
+genes <- getSchemaClass(class = "GenomeEncodedEntity", species = "human", all = TRUE)
+geneIDs <- as.matrix(genes$dbId)
+save(pathwayIDs,geneIDs, file = "./data/GPids.RData")
+```
+
+```{r}
+# Get sub-Events of an Event
+in15869 <- getParticipants("R-HSA-15869", retrieval = "AllInstances")
+# Only keep gene encoded entities
+Genes15869 <- in15869[in15869$schemaClass == "EntityWithAccessionedSequence",] 
+```
+
+Create a binary matrix of genes in pathways
+
+```{r}
+GPmatrix <- matrix(0, ncol = length(pathwayIDs), nrow = length(geneIDs))
+colnames(GPmatrix) <- pathwayIDs 
+rownames(GPmatrix) <- geneIDs
+```
+
+```{r}
+i <- 0
+for (pID in pathwayIDs) {
+  partAll <- getParticipants(pID, retrieval = "AllInstances")
+  partGene <- partAll[partAll$schemaClass == "EntityWithAccessionedSequence",] 
+  GPmatrix[partGene$peDbId %in% geneIDs ,as.character(pID)] <- 1 
+  i <- 1+i
+  cat('\r',round(i/length(pathwayIDs)*100,digits = 2),"%", sep = "")
+}
+```
+```{r}
+#GPmatrix <- Matrix(GPmatrix, sparse = TRUE)
+save(GPmatrix, file = "./data/ReactomeMatrix.RData")
+#m <- as.matrix(GPmatrix)
+write.csv(as.data.frame(m), file = "./data/ReactomeMatrix.csv", quote = FALSE)
+```
+
+Create a data frame with correspondence ids-name and save as csv.
+```{r}
+library(ReactomeContentService4R)
+prefix <- "R-HSA-"
+load(file = "./data/GPids.RData")
+m <- matrix(0,nrow <- length(pathwayIDs),ncol <- 2)
+colnames(m) <- c("dbId", "name")
+m[,"dbId"] <- pathwayIDs 
+dfPathway <- data.frame(m)
+rm(m)
+i <- 0
+for (id in dfPathway$dbId) {
+  dfPathway[dfPathway$dbId == id,]$name <- query(id)$name[1]
+  i <- 1+i
+  cat('\r',round(i/length(pathwayIDs)*100,digits = 2),"%", sep = "")
+}
+write.csv(dfPathway, file = "./data/PathwaysIdNames.csv", quote = FALSE)
+```
+
+```{r}
+genes <- getSchemaClass(class = "GenomeEncodedEntity", species = "human", all = TRUE)
+```
+
+```{r}
+m <- matrix(0,nrow <- length(geneIDs),ncol <- 2)
+colnames(m) <- c("dbId", "name")
+m[,"dbId"] <- genes$dbId
+for (i in 1:length(genes$dbId)) {
+  m[i,"name"] <- genes[i]$name[[1]][1]
+  cat('\r',round(i/length(geneIDs)*100,digits = 2),"%", sep = "")
+}
+#m[,"names"] <- genes$name[,1]   
+dfGene <- data.frame(m)
+rm(m)
+write.csv(dfGene, file = "./data/GenesIdNames.csv", quote = FALSE)
+```
+
+
+```{r}
+mat <- read.csv(file = "./data/ReactomeMatrix.csv", row.names = 1)
+table(colSums(mat))
+```
+We have a problem
+
+```{r}
+load(file = "./data/GPids.RData")
+pID <- pathwayIDs[1] 
+partAll <- getParticipants(pID, retrieval = "AllInstances")
+length(partAll)
+sum(mat[,1] )
+```
+Create a binary matrix of genes in pathways
+
+```{r}
+GPmatrix <- matrix(0, ncol = length(pathwayIDs), nrow = length(geneIDs))
+colnames(GPmatrix) <- pathwayIDs 
+rownames(GPmatrix) <- geneIDs
+```
+
+```{r}
+i <- 0
+for (pID in pathwayIDs) {
+  partAll <- getParticipants(pID, retrieval = "AllInstances")
+  partGene <- partAll[partAll$schemaClass == "EntityWithAccessionedSequence",] 
+  GPmatrix[geneIDs %in% partGene$peDbId,as.character(pID)] <- 1 
+  i <- 1+i
+  cat('\r',round(i/length(pathwayIDs)*100,digits = 2),"%", sep = "")
+}
+write.csv(as.data.frame(GPmatrix), file = "./data/Reactome.peDbId.matrix.csv", quote = FALSE)
+```
+```{r}
+hist(colSums(GPmatrix), breaks = 1000, xlim = c(0,100))
+table(colSums(GPmatrix))
+```
+
+```{r}
+zeroCol <- names(which(colSums(GPmatrix) == 0))
+partAll <- getParticipants(zeroCol[i], retrieval = "AllInstances")
+length(partAll$peDbId)
+partGene <- partAll[partAll$schemaClass == "EntityWithAccessionedSequence",] 
+length(partGene$peDbId)
+```
+
+```{r}
+names <- read.csv("./data/PathwaysIdNames.csv")
+head(names$name[names$dbId %in% zeroCol] )
+```
+Remove pathways with no genes participant
+
+```{r}
+newGPmatrix <- GPmatrix[,-(which(colSums(GPmatrix) == 0))] 
+dim(GPmatrix)[2]-dim(newGPmatrix)[2] 
+table(colSums(newGPmatrix))
+```
+:)
+```{r}
+write.csv(as.data.frame(newGPmatrix), file = "./data/Reactome.peDbId.matrix.csv", quote = FALSE)
+```
+
+```{r}
+rsum <- table(rowSums(newGPmatrix))
+rsum[[1]]/dim(newGPmatrix)[1]*100
+```
+80% of genes are not part of any pathway. We will need to set a group for those genes.
+
+```{r}
+hist(colSums(newGPmatrix), breaks = 1000, xlim = c(0,100))
+```
+
