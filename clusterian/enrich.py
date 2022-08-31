@@ -315,7 +315,7 @@ def getBest_cluster_list(enr_dir, pval=False):
     bestCl_list = list(dict.fromkeys(items))
     return bestCl_list
 
-def getEnrich_cl(enr_dir, cl, score_th=300, pval=None, mm=None):
+def getEnrich_cl(enr_dir, cl, score_th=300, pval=None, mm=None, ovlp_th=None):
     """Get the enrichment analysis results for one cluster.
     
     Parameters
@@ -364,6 +364,7 @@ def getEnrich_cl(enr_dir, cl, score_th=300, pval=None, mm=None):
         mm = pd.read_csv(mm_file, index_col=0)
     cl_genes = np.sort(mm.loc[mm.iloc[:,cl]==1,:].index)
     
+    enr_dir = enr_dir.removesuffix('/')
     enr_cl_dir = enr_dir.split('/')[-1]+'_'+str(int(cl))
     enr_cl_path = os.path.join(enr_dir, enr_cl_dir)
 
@@ -390,13 +391,33 @@ def getEnrich_cl(enr_dir, cl, score_th=300, pval=None, mm=None):
     
     #if type(score_th)==type(None) and type(pval)==type(None):
     #    return enr_cl, cl_genes
-
+    #if type(ovlp_th)!=type(None):
     try:
-        if type(pval)==type(None):
-            enr_cl = enr_cl.loc[enr_cl.loc[:,'Combined Score']>score_th,:]
-        else:
-            enr_cl = enr_cl.loc[enr_cl.loc[:,'Adjusted P-value']<pval,:]
-        enr_genes = np.unique(';'.join(enr_cl.iloc[:,-1]).split(';'))
+        overlap_str = enr_cl.loc[:,'Overlap'].tolist()
+        overlap_num = []
+        for i in range(len(overlap_str)):
+            sp = overlap_str[i].split('/')
+            overlap_num.append(int(sp[0])/int(sp[1]))
+        enr_cl = pd.concat(
+            [enr_cl, pd.Series(overlap_num, index=enr_cl.index, 
+                               name='Overlap Num', dtype=float)], 
+            axis=1)
+
+        cond = pd.Series([True]*enr_cl.shape[0], index=enr_cl.index, dtype=bool)
+    
+        if type(pval)!=type(None):
+            cond *= enr_cl.loc[:,'Adjusted P-value']<=pval
+        if type(score_th)!=type(None):
+            cond *= enr_cl.loc[:,'Combined Score']>=score_th
+        if type(ovlp_th)!=type(None):
+            cond *= enr_cl.loc[:,'Overlap Num']>=ovlp_th
+                               
+#        if type(pval)==type(None):
+#            enr_cl = enr_cl.loc[enr_cl.loc[:,'Combined Score']>score_th,:]
+#        else:
+#            enr_cl = enr_cl.loc[enr_cl.loc[:,'Adjusted P-value']<pval,:]
+        enr_cl = enr_cl.loc[cond,:]
+        enr_genes = np.unique(';'.join(enr_cl.loc[:,'Genes']).split(';'))
     except KeyError:
         print('KeyError on cl', cl)
         return None, None, cl_genes
@@ -854,10 +875,8 @@ def getBest_cCLEAN(ydf, q=0.95, cutLow=0.40, cutHigh=0.75, plot=True, plot_all=T
         
     return Y_best_
 
-def getEnrich_cover(enr_dir, mm, pval=None, score=None):
-    if type(pval)==type(score):
-        raise Exception("One and only one of arguments `pval` and `score` must be specified")
-    
+def getEnrich_cover(enr_dir, mm, pval=None, score=None, ovlp_th=None):
+
     #print('Loading membership matrix...')
     #mm = misc.load_mm(mm_file)
     #print('Membership matrix loaded.')
@@ -869,7 +888,7 @@ def getEnrich_cover(enr_dir, mm, pval=None, score=None):
         #print('getEnrich...')
         #print(enr_dir,c)
         enr_cl, enr_genes, cl_genes = getEnrich_cl(enr_dir, c, pval=pval, score_th=score,
-                                                mm=mm)
+                                                mm=mm, ovlp_th=ovlp_th)
         #print(enr_genes)
         #print('Done.')
         if type(enr_genes)==type(None):
@@ -908,3 +927,34 @@ def cleanEnrDir(enr_dir):
                     os.rmdir(root)
                     print('rmdir', root)
     return None
+
+
+
+
+def getGO(enr, string=False):
+    GO = []
+    for t in enr.loc[:,'Term']:
+        GO.append(t.split(' ')[-1][1:-1])
+    if not string:
+        return GO
+    return ','.join(GO)
+
+def getOntology(enr):
+    go = getGO(enr, string=True)
+    urlBase = "https://www.ebi.ac.uk/QuickGO/services/ontology/go/terms/{ids}/chart?ids="
+
+    GO_str = go.replace(':','%3A').replace(',','%2C')
+    requestURL = urlBase+GO_str
+    return requestURL
+
+def saveOntology(requestURL, fname, imgDir):
+    r = requests.get(requestURL, headers={ "Accept" : "image/png"})
+
+    if not r.ok:
+        #r.raise_for_status()
+        #sys.exit()
+        print('r not ok')
+
+    f = open(os.path.join(imgDir,fname+'.png'), 'wb')
+    f.write(r.content)
+    f.close()

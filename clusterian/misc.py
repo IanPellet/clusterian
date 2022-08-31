@@ -2,6 +2,10 @@ import pandas as pd
 import numpy as np
 import os
 from statistics import mean, median
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+import random
+import seaborn as sns
 
 def get_mm_def(mm_file, extension='.csv'):
     """Get informations about membership matrix saved as `mm_file`.
@@ -288,3 +292,88 @@ def cleanup(mm=None, file_name=None, save=False):
             raise Exception('`file_name` must be passed to save cleaned matrix')
         mm.to_csv(file_name, header=None, index=True)
     return mm
+
+def plotClust(mm, tSNE, title=None):
+    # Filter out filled markers and marker settings that do nothing.
+    markers = [m for m,func in Line2D.markers.items() if func != 'nothing']
+    random.shuffle(markers)
+
+    combColMark = comb(marker=markers, color=sns.color_palette("tab10"))
+    random.shuffle(combColMark)
+    fsizeinit = plt.rcParams['figure.figsize']
+    plt.rcParams['figure.figsize'] = 15,15
+    for ic in range(mm.shape[1]):
+        inClust = mm.iloc[:,ic]==1
+        genes = mm.iloc[list(inClust),ic].index
+        coord = tSNE.loc[genes,:]
+        plt.scatter(x=coord.loc[:,'x'],y=coord.loc[:,'y'], **combColMark[ic][1], s=30, alpha=0.7)
+        
+    if title != None:
+        plt.title(title)
+    plt.show()
+    plt.rcParams['figure.figsize'] = fsizeinit
+    
+    
+def comb(*args, **kwargs):
+    Li = [[i for i in range(len(a))] for a in args]
+    for arg in kwargs:
+        Li.append([i for i in range(len(kwargs[arg]))])
+
+    all_combinations = []
+    past = []
+    future = [len(l) for l in Li]
+
+    for i in range(len(Li)):
+        tmp = future.pop(0)
+        rep = np.repeat(Li[i], np.prod(future), axis=0)
+        nrep = np.prod(past, dtype=int)
+        if nrep>1:
+            til = np.tile(rep, nrep)
+        else:
+            til = rep
+
+        all_combinations.append(til)
+        past.append(tmp)
+    
+    comb = np.vstack(all_combinations).T
+
+    comb2 = []
+    for ic in range(comb.shape[0]):
+        ia = comb[ic, 0:len(args)]
+        ikwa = comb[ic, len(args):(len(args)+len(kwargs))]
+        
+        a = []
+        for i in range(len(args)):
+            a.append(args[i][ia[i]])
+        a = tuple(a)
+        kwa = {key:kwargs[key][ival] for key,ival in zip(kwargs, ikwa)}
+        
+        comb2.append([a,kwa])
+    return comb2
+
+def plotCl(mm, tSNE, cl, title=None, s=20, scl=50, alpha=0.5, save=False, fname=None):
+    
+    plt.scatter(x=tSNE.loc[:,'x'],y=tSNE.loc[:,'y'], c='grey', s=s, alpha=alpha)
+    inClust = mm.iloc[:,cl]==1
+    genes = mm.iloc[list(inClust),cl].index
+    coord = tSNE.loc[genes,:]
+    plt.scatter(x=coord.loc[:,'x'],y=coord.loc[:,'y'], c='red', s=scl)    
+    if title != None:
+        plt.title(title)
+    if save:
+        plt.savefig(fname, bbox_inches='tight')
+    plt.show()
+
+def plotCls(mm, tSNE, cl_, title=None, s=20, scl=50, alpha=0.5, save=False, fname=None):
+    plt.scatter(x=tSNE.loc[:,'x'],y=tSNE.loc[:,'y'], c='grey', s=s, alpha=alpha) # plot t-SNE in grey
+    for cl in cl_:
+        inClust = mm.iloc[:,cl]==1
+        genes = mm.iloc[list(inClust),cl].index
+        coord = tSNE.loc[genes,:]
+        plt.scatter(x=coord.loc[:,'x'],y=coord.loc[:,'y'], s=scl, label=str(cl))    
+    plt.legend(title='Cluster N°', fontsize='xx-large', title_fontsize='xx-large')
+    if title != None:
+        plt.title(title)
+    if save:
+        plt.savefig(fname, bbox_inches='tight')
+    plt.show()
